@@ -4,7 +4,7 @@ The codename for the project is forge-kivu! This is not the product name!
 
 ## Project setup and organization
 
-- Alias imports should be used!
+- Use portable imports across package boundaries: workspace package names, relative paths, or package-scoped `#` aliases—not `@/*`.
 - Dependencies versions should be pinned!
 
 ## Code output style (Important!)

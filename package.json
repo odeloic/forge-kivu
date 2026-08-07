@@ -14,8 +14,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "pnpm -r typecheck",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "test": "pnpm --filter @forge-kivu/api-client build && vitest run",
+    "test:watch": "pnpm --filter @forge-kivu/api-client build && vitest"
   },
   "devDependencies": {
     "@forge-kivu/eslint-config": "workspace:*",

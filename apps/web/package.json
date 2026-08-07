@@ -3,12 +3,12 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "build": "nuxt build",
-    "dev": "nuxt dev",
-    "generate": "nuxt generate",
+    "build": "pnpm --filter @forge-kivu/api-client build && nuxt build",
+    "dev": "pnpm --filter @forge-kivu/api-client build && nuxt dev",
+    "generate": "pnpm --filter @forge-kivu/api-client build && nuxt generate",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
-    "typecheck": "nuxt typecheck"
+    "typecheck": "pnpm --filter @forge-kivu/api-client build && nuxt typecheck"
   },
   "dependencies": {
     "@forge-kivu/api-client": "workspace:*",

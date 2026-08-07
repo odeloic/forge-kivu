@@ -4,18 +4,25 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
   },
   "scripts": {
     "dev": "bun run --hot src/index.ts",
-    "build": "bun build src/index.ts --outdir dist --target bun",
+    "build": "pnpm run build:server && pnpm run build:types",
+    "build:server": "bun build src/index.ts --outdir dist --target bun",
+    "build:types": "tsc -p tsconfig.build.json",
     "start": "bun run dist/index.js",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@forge-kivu/types": "workspace:*",
     "@hono/zod-validator": "catalog:",
-    "hono": "catalog:"
+    "hono": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@forge-kivu/tsconfig": "workspace:*",

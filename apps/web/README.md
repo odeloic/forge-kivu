@@ -1,75 +1,49 @@
-# Nuxt Minimal Starter
+# Web
 
-Look at the [Nuxt documentation](https://nuxt.com/docs/getting-started/introduction) to learn more.
+The web application runs on Nuxt at http://localhost:3000 and consumes the compiled `@forge-kivu/api-client` package.
 
 ## Setup
 
-Make sure to install dependencies:
+Install workspace dependencies from the repository root:
 
-```bash
-# npm
-npm install
-
-# pnpm
+```sh
 pnpm install
-
-# yarn
-yarn install
-
-# bun
-bun install
 ```
 
-## Development Server
+## Development
 
-Start the development server on `http://localhost:3000`:
+Start the application from the repository root:
 
-```bash
-# npm
-npm run dev
-
-# pnpm
-pnpm dev
-
-# yarn
-yarn dev
-
-# bun
-bun run dev
+```sh
+pnpm --filter @forge-kivu/web dev
 ```
 
-## Production
+The development command compiles the API client before starting Nuxt.
 
-Build the application for production:
+## Build
 
-```bash
-# npm
-npm run build
-
-# pnpm
-pnpm build
-
-# yarn
-yarn build
-
-# bun
-bun run build
+```sh
+pnpm --filter @forge-kivu/web build
 ```
 
-Locally preview production build:
+The build command emits the API declarations, compiles the API client, and then builds Nuxt.
 
-```bash
-# npm
-npm run preview
+Preview the production build:
 
-# pnpm
-pnpm preview
-
-# yarn
-yarn preview
-
-# bun
-bun run preview
+```sh
+pnpm --filter @forge-kivu/web preview
 ```
 
-Check out the [deployment documentation](https://nuxt.com/docs/getting-started/deployment) for more information.
+## Typecheck
+
+```sh
+pnpm --filter @forge-kivu/web typecheck
+```
+
+Nuxt consumes `packages/api-client/dist/index.d.ts`; its typechecker does not load `apps/api/src`.
+
+## Generate
+
+```sh
+pnpm --filter @forge-kivu/web generate
+```

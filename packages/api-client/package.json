@@ -4,13 +4,19 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "build": "pnpm --filter @forge-kivu/api build:types && tsc -p tsconfig.build.json",
+    "typecheck": "pnpm --filter @forge-kivu/api build:types && tsc --noEmit"
   },
   "dependencies": {
-    "hono": "catalog:"
+    "hono": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@forge-kivu/api": "workspace:*",
