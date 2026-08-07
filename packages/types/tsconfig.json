@@ -1,0 +1,4 @@
+{
+  "extends": "@forge-kivu/tsconfig/base.json",
+  "include": ["src"]
+}

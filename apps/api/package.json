@@ -1,0 +1,26 @@
+{
+  "name": "@forge-kivu/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "dev": "bun run --hot src/index.ts",
+    "build": "bun build src/index.ts --outdir dist --target bun",
+    "start": "bun run dist/index.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@forge-kivu/types": "workspace:*",
+    "@hono/zod-validator": "catalog:",
+    "hono": "catalog:"
+  },
+  "devDependencies": {
+    "@forge-kivu/tsconfig": "workspace:*",
+    "@types/bun": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}
