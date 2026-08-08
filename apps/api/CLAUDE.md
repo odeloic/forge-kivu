@@ -1,0 +1,9 @@
+- **KEEP Routes thin**: (validate with zValidator, calls service and return JSON handlers), no business logic in routes
+- **Services are the module's public interface**: modules should call other services' *.service.ts not *.table.ts directly!
+- **Tables live in the module**: Barrel re-exported in db/schema.ts for drizzle-kit
+- **Cross-module flow is one direction**: `routes → own service → own tables + other services` (:warning: If two services call each other, merge them or extract the shared part.)
+- No controller classes
+- Chain routes inside each module `(new Hono().get().post(...))`
+- Handlers inline, logic in service functions
+- Middlewares should be typed
+- No dependency-injection container. Plain functions and module-scope singletons. For better testability and Hono specific
