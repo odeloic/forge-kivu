@@ -14,3 +14,6 @@ The codename for the project is forge-kivu! This is not the product name!
 - CONVERSATION SHOULD NOT BE LEAKED INTO THE COMMENTS
 - COMMENTS SHOULD NOT BE USED TO DESCRIBE DECISIONS
 - THE ACTUAL CODE IS THE ONLY SOURCE OF truth
+
+## Project documentation (specs, plans, etc...)
+- Every LLM generated specs, plans should live inside the artifacts/ directory
