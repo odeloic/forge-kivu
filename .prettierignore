@@ -5,3 +5,4 @@ coverage/
 .output/
 pnpm-lock.yaml
 apps/api/drizzle/
+**/*.md
