@@ -6,6 +6,7 @@ The codename for the project is forge-kivu! This is not the product name!
 
 - Use portable imports across package boundaries: workspace package names, relative paths, or package-scoped `#` aliases—not `@/*`.
 - Dependencies versions should be pinned!
+- Create new database migrations with `pnpm db:generate` in `apps/api` — never write migration files by hand.
 
 ## Code output style (Important!)
 

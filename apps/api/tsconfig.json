@@ -1,4 +1,9 @@
 {
   "extends": "@forge-kivu/tsconfig/bun.json",
-  "include": ["src"]
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": ["src", "drizzle.config.ts"]
 }

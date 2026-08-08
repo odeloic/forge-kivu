@@ -4,7 +4,7 @@ import { cors } from 'hono/cors'
 
 import { createTodoSchema } from '@forge-kivu/types'
 
-import { todos } from './todos'
+import { todos } from '@/todos'
 
 export const app = new Hono()
   .use(cors())

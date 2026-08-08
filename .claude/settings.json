@@ -1,0 +1,24 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -c 'if ((.tool_input.file_path // \"\") | test(\"apps/api/drizzle/\")) then {hookSpecificOutput:{hookEventName:\"PreToolUse\",permissionDecision:(if .tool_name == \"Write\" then \"deny\" else \"ask\" end),permissionDecisionReason:(if .tool_name == \"Write\" then \"New migration files must be generated, not hand-written. Edit apps/api/src/db/schema.ts, run pnpm db:generate to create the migration, pnpm db:migrate to apply it.\" else \"This is a generated migration file. Prefer regenerating with pnpm db:generate. Approve only if this is an intentional manual tweak.\" end)}} else empty end'"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -c 'if ((.tool_input.command // \"\") | test(\"apps/api/drizzle|drizzle/\")) then {hookSpecificOutput:{hookEventName:\"PreToolUse\",permissionDecision:\"ask\",permissionDecisionReason:\"This command touches the generated migrations folder. Migrations come from pnpm db:generate. Approve only if this is intentional.\"}} else empty end'"
+          }
+        ]
+      }
+    ]
+  }
+}
