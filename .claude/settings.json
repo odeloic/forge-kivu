@@ -15,7 +15,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "jq -c 'if ((.tool_input.command // \"\") | test(\"apps/api/drizzle|drizzle/\")) then {hookSpecificOutput:{hookEventName:\"PreToolUse\",permissionDecision:\"ask\",permissionDecisionReason:\"This command touches the generated migrations folder. Migrations come from pnpm db:generate. Approve only if this is intentional.\"}} else empty end'"
+            "command": "jq -c 'def cmd: (.tool_input.command // \"\"); if (cmd | test(\"drizzle/\")) and (cmd | test(\">{1,2}|\\\\b(tee|touch|sed -i|rm|mv|cp|mkdir|chmod|vim|nano|emacs|code)\\\\b\")) then {hookSpecificOutput:{hookEventName:\"PreToolUse\",permissionDecision:\"ask\",permissionDecisionReason:\"This command modifies the generated migrations folder. Migrations come from pnpm db:generate. Approve only if this is intentional.\"}} else empty end'"
           }
         ]
       }
