@@ -4,3 +4,5 @@ export {
   userRole,
   users,
 } from '../modules/auth/auth.tables'
+
+export { media, mediaStatus } from '../modules/media/media.tables'

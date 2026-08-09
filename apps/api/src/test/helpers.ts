@@ -12,9 +12,12 @@ export type TestUser = {
   role?: Role
 }
 
+/**
+ * Isn't this a recipe for disaster?
+ */
 export const resetDatabase = async (): Promise<void> => {
   await db.execute(
-    sql`truncate table "password_reset_tokens", "sessions", "users" cascade`,
+    sql`truncate table "media", "password_reset_tokens", "sessions", "users" cascade`,
   )
   outbox.length = 0
 }

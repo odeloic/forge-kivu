@@ -10,6 +10,7 @@ import { createTodoSchema, makeErrorResponse } from '@forge-kivu/types'
 import { AppError } from './lib/errors'
 import { logger } from './lib/logger'
 import { authRoutes } from './modules/auth/auth.routes'
+import { mediaRoutes } from './modules/media/media.routes'
 import { todos } from './todos'
 
 export const app = new Hono<{ Variables: RequestIdVariables }>()
@@ -44,6 +45,7 @@ export const app = new Hono<{ Variables: RequestIdVariables }>()
     )
   })
   .route('/auth', authRoutes)
+  .route('/media', mediaRoutes)
   .get('/todos', (c) => c.json(todos.list()))
   .post('/todos', zValidator('json', createTodoSchema), (c) =>
     c.json(todos.create(c.req.valid('json')), 201),
