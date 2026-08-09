@@ -1,5 +1,7 @@
 import { z } from 'zod'
 
+export * from './errors'
+
 export const todoSchema = z.object({
   id: z.string(),
   title: z.string().min(1),

@@ -1,22 +1,7 @@
-/**
- * Entry point + fetch only
- */
-import { zValidator } from '@hono/zod-validator'
-import { Hono } from 'hono'
-import { cors } from 'hono/cors'
+import { app } from './app'
 
-import { createTodoSchema } from '@forge-kivu/types'
-
-import { todos } from '@/todos'
-
-export const app = new Hono()
-  .use(cors())
-  .get('/todos', (c) => c.json(todos.list()))
-  .post('/todos', zValidator('json', createTodoSchema), (c) =>
-    c.json(todos.create(c.req.valid('json')), 201),
-  )
-
-export type AppType = typeof app
+export { app }
+export type { AppType } from './app'
 
 export default {
   port: 3001,

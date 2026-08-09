@@ -14,7 +14,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm --filter @forge-kivu/api-client build && vitest run",
+    "test": "pnpm --filter @forge-kivu/api-client build && vitest run && pnpm --filter @forge-kivu/api test",
     "test:watch": "pnpm --filter @forge-kivu/api-client build && vitest"
   },
   "devDependencies": {

@@ -17,6 +17,8 @@
     "build:types": "tsc -p tsconfig.build.json",
     "start": "bun run dist/index.js",
     "typecheck": "tsc --noEmit",
+    "test": "bun --bun run vitest run",
+    "test:watch": "bun --bun run vitest",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio"
@@ -27,6 +29,7 @@
     "@hono/zod-validator": "catalog:",
     "drizzle-orm": "catalog:",
     "hono": "catalog:",
+    "pino": "catalog:",
     "postgres": "catalog:",
     "zod": "catalog:"
   },

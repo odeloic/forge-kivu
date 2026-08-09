@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { todoSchema } from '@forge-kivu/types'
 
-import { app } from '@/index'
+import { app } from './index'
 
 describe('todos routes', () => {
   it('starts with an empty list', async () => {

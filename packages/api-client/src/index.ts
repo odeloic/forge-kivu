@@ -4,7 +4,9 @@ import type { AppType } from '@forge-kivu/api'
 
 type ClientOptions = Parameters<typeof hc>[1]
 
-export const createClient = (baseUrl: string, options?: ClientOptions) =>
-  hc<AppType>(baseUrl, options)
+export type ApiClient = ReturnType<typeof hc<AppType>>
 
-export type ApiClient = ReturnType<typeof createClient>
+export const createClient = (
+  baseUrl: string,
+  options?: ClientOptions,
+): ApiClient => hc<AppType>(baseUrl, options)
