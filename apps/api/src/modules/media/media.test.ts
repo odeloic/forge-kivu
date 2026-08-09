@@ -247,7 +247,7 @@ describe('serve and delete', () => {
     })
     const row = await createReadyMedia(user)
 
-    const res = await app.request(`/media/${row.id}`, {
+    const res = await app.request(`/admin/media/${row.id}`, {
       method: 'DELETE',
       headers: { cookie: admin, 'content-type': 'application/json' },
     })
@@ -267,7 +267,7 @@ describe('serve and delete', () => {
     })
     const row = await createReadyMedia(user)
 
-    const res = await app.request(`/media/${row.id}`, {
+    const res = await app.request(`/admin/media/${row.id}`, {
       method: 'DELETE',
       headers: { cookie: user, 'content-type': 'application/json' },
     })

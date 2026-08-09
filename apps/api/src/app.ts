@@ -13,7 +13,7 @@ import { auth } from './middleware/auth'
 import { requireRole } from './middleware/require-role'
 import { authRoutes } from './modules/auth/auth.routes'
 import { ROLES } from './modules/auth/auth.service'
-import { mediaRoutes } from './modules/media/media.routes'
+import { adminMediaRoutes, mediaRoutes } from './modules/media/media.routes'
 import {
   adminSupplierRoutes,
   supplierRoutes,
@@ -22,6 +22,7 @@ import { todos } from './todos'
 
 const adminRoutes = new Hono()
   .use('*', auth, requireRole(ROLES.ADMIN))
+  .route('/media', adminMediaRoutes)
   .route('/suppliers', adminSupplierRoutes)
 
 export const app = new Hono<{ Variables: RequestIdVariables }>()

@@ -8,7 +8,7 @@
 4. **A `status` column (`pending` → `ready`) tracks the flow.** A row is `pending` until the client confirms and the service verifies the object actually exists with the expected size. Without this column, real media and abandoned uploads are indistinguishable.
 5. **Verification at confirm uses a HEAD request** — a metadata-only call to storage that returns the object's size without downloading it.
 6. **Serving is public and direct.** The bucket is public-read (or fronted by a CDN). The service exposes a pure `getPublicUrl(key)` that other modules call when building responses. No presigned download links, no image bytes proxied through the API.
-7. **No module middleware.** Upload routes use the existing `auth` middleware; delete uses `requireRole('admin')`. Rules like "only ready media can be attached to a product" are service-level checks in the consuming module.
+7. **No module middleware.** Upload routes use the existing `auth` middleware; delete is guarded by the `/admin` namespace mount. Rules like "only ready media can be attached to a product" are service-level checks in the consuming module.
 8. **File rules:** allowed types are jpeg, png, and webp; a maximum size applies. Both are enforced twice — by zod when the upload is requested, and against the real object at confirm.
 9. **Deferred:** a cleanup job for abandoned `pending` rows and their objects, and image resizing/thumbnails. The `status` column is what makes the cleanup job possible later.
 
@@ -50,8 +50,17 @@ remove(mediaId)                                  deletes object and row
 ```
 POST   /media               request an upload (logged in)
 POST   /media/:id/confirm   confirm the upload (logged in)
-DELETE /media/:id           admin only
+
+DELETE /admin/media/:id
 ```
+
+Admin routes follow `artifacts/api-route-conventions.md`: they live under the
+`/admin` namespace, guarded once at the mount. The module exports two Hono
+sub-apps — `mediaRoutes` and `adminMediaRoutes`, which carries no auth middleware
+of its own.
+
+The upload routes stay on `/media`: they need a session, but any logged-in user
+may call them. `/admin` marks the role, not merely "needs a login".
 
 ## Implementation plan
 
@@ -79,12 +88,12 @@ Acceptance criteria:
 
 ### Step 3 — Serve and delete
 
-Build: `getPublicUrl`, `getReady`, `DELETE /media/:id`.
+Build: `getPublicUrl`, `getReady`, `DELETE /admin/media/:id`.
 
 Acceptance criteria:
 - The public URL of ready media loads in a browser.
 - Delete as admin removes both the database row and the object from the bucket.
-- Delete as designer returns 403.
+- Delete as a basic user returns 403.
 
 ## Test approach
 

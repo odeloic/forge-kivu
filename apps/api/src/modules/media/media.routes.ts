@@ -2,8 +2,6 @@ import { zValidator } from '@hono/zod-validator'
 import { Hono } from 'hono'
 
 import { auth } from '../../middleware/auth'
-import { requireRole } from '../../middleware/require-role'
-import { ROLES } from '../auth/auth.service'
 import { createUploadSchema } from './media.schemas'
 import { confirmUpload, createUpload, remove } from './media.service'
 
@@ -16,7 +14,8 @@ export const mediaRoutes = new Hono()
     const record = await confirmUpload(c.req.param('id'), c.get('user').id)
     return c.json(record, 200)
   })
-  .delete('/:id', auth, requireRole(ROLES.ADMIN), async (c) => {
-    await remove(c.req.param('id'))
-    return c.body(null, 204)
-  })
+
+export const adminMediaRoutes = new Hono().delete('/:id', async (c) => {
+  await remove(c.req.param('id'))
+  return c.body(null, 204)
+})
