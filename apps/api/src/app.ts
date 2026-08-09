@@ -18,12 +18,17 @@ import {
   adminSupplierRoutes,
   supplierRoutes,
 } from './modules/suppliers/suppliers.routes'
+import {
+  adminTaxonomyRoutes,
+  taxonomyRoutes,
+} from './modules/taxonomy/taxonomy.routes'
 import { todos } from './todos'
 
 const adminRoutes = new Hono()
   .use('*', auth, requireRole(ROLES.ADMIN))
   .route('/media', adminMediaRoutes)
   .route('/suppliers', adminSupplierRoutes)
+  .route('/', adminTaxonomyRoutes)
 
 export const app = new Hono<{ Variables: RequestIdVariables }>()
   .use(requestId())
@@ -59,6 +64,7 @@ export const app = new Hono<{ Variables: RequestIdVariables }>()
   .route('/auth', authRoutes)
   .route('/media', mediaRoutes)
   .route('/suppliers', supplierRoutes)
+  .route('/', taxonomyRoutes)
   .route('/admin', adminRoutes)
   .get('/todos', (c) => c.json(todos.list()))
   .post('/todos', zValidator('json', createTodoSchema), (c) =>

@@ -8,3 +8,5 @@ export {
 export { media, mediaStatus } from '../modules/media/media.tables'
 
 export { suppliers } from '../modules/suppliers/suppliers.tables'
+
+export { categories, specAttributes } from '../modules/taxonomy/taxonomy.tables'
