@@ -57,16 +57,25 @@ listAttributes()                                       → attribute[]
 ## Routes
 
 ```
-GET    /categories             public: full tree
-POST   /categories             admin
-PATCH  /categories/:id         admin
-DELETE /categories/:id         admin
+GET    /categories                    public: full tree
+GET    /spec-attributes               public: flat list
 
-GET    /spec-attributes        public: flat list
-POST   /spec-attributes        admin
-PATCH  /spec-attributes/:id    admin
-DELETE /spec-attributes/:id    admin
+POST   /admin/categories
+PATCH  /admin/categories/:id
+DELETE /admin/categories/:id
+
+POST   /admin/spec-attributes
+PATCH  /admin/spec-attributes/:id
+DELETE /admin/spec-attributes/:id
 ```
+
+Admin routes follow `artifacts/api-route-conventions.md`: they live under the
+`/admin` namespace, guarded once at the mount. The module exports two Hono
+sub-apps — `taxonomyRoutes` (public) and `adminTaxonomyRoutes`, which carries no
+auth middleware of its own.
+
+There is no admin read route: the public tree and attribute list are complete, so
+the admin screen reads the same URLs the storefront does.
 
 ## Implementation plan
 
@@ -74,7 +83,7 @@ Each step is a vertical slice: it ends with something you can run and check befo
 
 ### Step 1 — Category tree
 
-Build: `categories` table (migration via `pnpm db:generate`), zod schemas, category service functions, all four category routes.
+Build: `categories` table (migration via `pnpm db:generate`), zod schemas, category service functions, public `GET /categories` and the three `/admin/categories` routes.
 
 Acceptance criteria:
 - Admin creates "Tiles", then "Floor Tiles" with `parentId` pointing at it; `GET /categories` returns the nested shape with children ordered by `sortOrder`.
@@ -85,7 +94,7 @@ Acceptance criteria:
 
 ### Step 2 — Spec attributes
 
-Build: `spec_attributes` table (migration via `pnpm db:generate`), attribute service functions, all four attribute routes.
+Build: `spec_attributes` table (migration via `pnpm db:generate`), attribute service functions, public `GET /spec-attributes` and the three `/admin/spec-attributes` routes.
 
 Acceptance criteria:
 - Admin creates "Material" (no unit) and "Width" with unit "cm"; anonymous `GET /spec-attributes` returns both.

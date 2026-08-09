@@ -17,7 +17,7 @@ export type TestUser = {
  */
 export const resetDatabase = async (): Promise<void> => {
   await db.execute(
-    sql`truncate table "media", "password_reset_tokens", "sessions", "users" cascade`,
+    sql`truncate table "suppliers", "media", "password_reset_tokens", "sessions", "users" cascade`,
   )
   outbox.length = 0
 }

@@ -38,7 +38,8 @@ suppliers
 ```
 create({ name, slug, description?, logoMediaId? })  → supplier
 update(id, patch)                                   → supplier
-list({ includeHidden })                             → supplier[]
+listVisible()                                       → supplier[]        (public)
+listAll()                                           → supplier[]        (admin)
 getBySlug(slug)                                     → supplier | null   (visible only)
 getById(id)                                         → supplier | null   (for other modules)
 remove(id)                                            fails with conflict while products exist
@@ -47,12 +48,19 @@ remove(id)                                            fails with conflict while 
 ## Routes
 
 ```
-GET    /suppliers          public: visible suppliers only
-GET    /suppliers/:slug    public: one visible supplier
-POST   /suppliers          admin
-PATCH  /suppliers/:id      admin
-DELETE /suppliers/:id      admin
+GET    /suppliers               public: visible suppliers only
+GET    /suppliers/:slug         public: one visible supplier
+
+GET    /admin/suppliers         every supplier, hidden included
+POST   /admin/suppliers
+PATCH  /admin/suppliers/:id
+DELETE /admin/suppliers/:id
 ```
+
+Admin routes follow `artifacts/api-route-conventions.md`: they live under the
+`/admin` namespace, guarded once at the mount. The module exports two Hono
+sub-apps — `supplierRoutes` (public) and `adminSupplierRoutes`, which carries no
+auth middleware of its own.
 
 ## Implementation plan
 
@@ -60,17 +68,17 @@ Each step is a vertical slice: it ends with something you can run and check befo
 
 ### Step 1 — Create and list as admin
 
-Build: `suppliers` table (migration via `pnpm db:generate`), zod schemas, `create`, `list`, `POST /suppliers`, admin listing via `GET /suppliers` when the caller is admin (`includeHidden`).
+Build: `suppliers` table (migration via `pnpm db:generate`), zod schemas, `create`, `listAll`, `POST /admin/suppliers`, `GET /admin/suppliers`.
 
 Acceptance criteria:
 - Admin creates a supplier via curl: 201, row in the database with `visible = false`.
 - Creating with an already-used slug returns 409, caught from the unique constraint, not a check-then-insert.
 - A basic user gets 403; no session gets 401.
-- Admin `GET /suppliers` includes the hidden supplier just created.
+- `GET /admin/suppliers` includes the hidden supplier just created, and rejects a basic user with 403 and an anonymous caller with 401.
 
 ### Step 2 — Public reads
 
-Build: public `GET /suppliers` and `GET /suppliers/:slug`, logo URL built with `media.getPublicUrl`.
+Build: `listVisible`, public `GET /suppliers` and `GET /suppliers/:slug`, logo URL built with `media.getPublicUrl`.
 
 Acceptance criteria:
 - An anonymous request to `GET /suppliers` returns only suppliers with `visible = true`.
@@ -79,7 +87,7 @@ Acceptance criteria:
 
 ### Step 3 — Update and delete
 
-Build: `update`, `remove`, `PATCH /suppliers/:id`, `DELETE /suppliers/:id`.
+Build: `update`, `remove`, `PATCH /admin/suppliers/:id`, `DELETE /admin/suppliers/:id`.
 
 Acceptance criteria:
 - Setting `visible` to true makes the supplier appear in the public list on the next request; setting it back hides it again.

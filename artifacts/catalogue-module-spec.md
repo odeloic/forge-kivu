@@ -81,18 +81,26 @@ getPublished(supplierSlug, productSlug)                              → product
 ## Routes
 
 ```
-POST   /products                 admin        PUT /products/:id/options    admin
-GET    /products                 admin list   PUT /products/:id/variants   admin
-GET    /products/:id             admin        PUT /products/:id/specs      admin
-PATCH  /products/:id             admin        PUT /products/:id/media      admin
-DELETE /products/:id             admin
-POST   /products/:id/publish     admin
-POST   /products/:id/unpublish   admin
-
 GET /catalogue/products                              public list
     ?category=<slug>&supplier=<slug>&spec.<attribute-slug>=<value>&page=
 GET /catalogue/products/:supplierSlug/:productSlug   public detail
+
+POST   /admin/products                 PUT /admin/products/:id/options
+GET    /admin/products                 PUT /admin/products/:id/variants
+GET    /admin/products/:id             PUT /admin/products/:id/specs
+PATCH  /admin/products/:id             PUT /admin/products/:id/media
+DELETE /admin/products/:id
+POST   /admin/products/:id/publish
+POST   /admin/products/:id/unpublish
 ```
+
+Admin routes follow `artifacts/api-route-conventions.md`: they live under the
+`/admin` namespace, guarded once at the mount. The module exports two Hono
+sub-apps — `catalogueRoutes` (public, mounted at `/catalogue`) and
+`adminCatalogueRoutes`, which carries no auth middleware of its own.
+
+The split is what makes decision 7 enforceable: `/admin/products` serves drafts,
+`/catalogue/products` never does, so no handler has to branch on the session.
 
 ## Implementation plan
 
@@ -100,7 +108,7 @@ Each step is a vertical slice: it ends with something you can run and check befo
 
 ### Step 1 — Create a product with its default variant
 
-Build: `products` and `product_variants` tables (migration via `pnpm db:generate`), `createProduct`, `updateProduct`, `POST /products`, admin `GET` routes.
+Build: `products` and `product_variants` tables (migration via `pnpm db:generate`), `createProduct`, `updateProduct`, `POST /admin/products`, both admin `GET` routes.
 
 Acceptance criteria:
 - Admin creates a product: 201, one `draft` product row and one variant row with no option values.
@@ -110,7 +118,7 @@ Acceptance criteria:
 
 ### Step 2 — Options and variants
 
-Build: `product_options`, `product_option_values`, `variant_option_values` tables (migration via `pnpm db:generate`), `setOptions`, `setVariants`, both `PUT` routes.
+Build: `product_options`, `product_option_values`, `variant_option_values` tables (migration via `pnpm db:generate`), `setOptions`, `setVariants`, both `PUT /admin/products/:id/*` routes.
 
 Acceptance criteria:
 - Define Color (Red, Blue) and Size (60x60, 30x30); submit four variants with prices; the default variant is gone and the four combinations are queryable.
@@ -121,7 +129,7 @@ Acceptance criteria:
 
 ### Step 3 — Specs and media
 
-Build: `product_specs` and `product_media` tables (migration via `pnpm db:generate`), `setSpecs`, `setMedia`, both `PUT` routes.
+Build: `product_specs` and `product_media` tables (migration via `pnpm db:generate`), `setSpecs`, `setMedia`, both `PUT /admin/products/:id/*` routes.
 
 Acceptance criteria:
 - Set Material = Ceramic and Width = 60; the admin detail returns both with attribute names and units.
@@ -142,7 +150,7 @@ Acceptance criteria:
 
 ### Step 5 — Delete a product (can be deferred; nothing depends on it)
 
-Build: `removeProduct`, `DELETE /products/:id`.
+Build: `removeProduct`, `DELETE /admin/products/:id`.
 
 Acceptance criteria:
 - Delete removes the product and its options, values, variants, specs, and media links in one transaction.

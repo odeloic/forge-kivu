@@ -9,9 +9,20 @@ import { createTodoSchema, makeErrorResponse } from '@forge-kivu/types'
 
 import { AppError } from './lib/errors'
 import { logger } from './lib/logger'
+import { auth } from './middleware/auth'
+import { requireRole } from './middleware/require-role'
 import { authRoutes } from './modules/auth/auth.routes'
+import { ROLES } from './modules/auth/auth.service'
 import { mediaRoutes } from './modules/media/media.routes'
+import {
+  adminSupplierRoutes,
+  supplierRoutes,
+} from './modules/suppliers/suppliers.routes'
 import { todos } from './todos'
+
+const adminRoutes = new Hono()
+  .use('*', auth, requireRole(ROLES.ADMIN))
+  .route('/suppliers', adminSupplierRoutes)
 
 export const app = new Hono<{ Variables: RequestIdVariables }>()
   .use(requestId())
@@ -46,6 +57,8 @@ export const app = new Hono<{ Variables: RequestIdVariables }>()
   })
   .route('/auth', authRoutes)
   .route('/media', mediaRoutes)
+  .route('/suppliers', supplierRoutes)
+  .route('/admin', adminRoutes)
   .get('/todos', (c) => c.json(todos.list()))
   .post('/todos', zValidator('json', createTodoSchema), (c) =>
     c.json(todos.create(c.req.valid('json')), 201),

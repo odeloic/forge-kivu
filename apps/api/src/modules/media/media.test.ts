@@ -1,8 +1,4 @@
-import {
-  CreateBucketCommand,
-  HeadObjectCommand,
-  PutBucketPolicyCommand,
-} from '@aws-sdk/client-s3'
+import { HeadObjectCommand } from '@aws-sdk/client-s3'
 import { eq } from 'drizzle-orm'
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
@@ -14,67 +10,20 @@ import { ROLES } from '../auth/auth.service'
 import { MAX_SIZE_BYTES } from './media.schemas'
 import { getPublicUrl, getReady } from './media.service'
 import { media, MEDIA_STATUSES } from './media.tables'
-import { jsonRequest, loginAs, resetDatabase } from '../../test/helpers'
-
-const PNG_BYTES = new Uint8Array([
-  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
-])
-
-const ensurePublicBucket = async (): Promise<void> => {
-  await s3
-    .send(new CreateBucketCommand({ Bucket: env.S3_BUCKET }))
-    .catch(() => {})
-
-  await s3.send(
-    new PutBucketPolicyCommand({
-      Bucket: env.S3_BUCKET,
-      Policy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Effect: 'Allow',
-            Principal: { AWS: ['*'] },
-            Action: ['s3:GetObject'],
-            Resource: [`arn:aws:s3:::${env.S3_BUCKET}/*`],
-          },
-        ],
-      }),
-    }),
-  )
-}
-
-type UploadResponse = { mediaId: string; uploadUrl: string }
-
-const requestUpload = async (
-  cookie: string,
-  body: unknown = { mimeType: 'image/png', sizeBytes: PNG_BYTES.byteLength },
-) => {
-  const res = await app.request('/media', jsonRequest(body, cookie))
-  const json = (await res.json().catch(() => ({}))) as UploadResponse
-  return { res, json }
-}
-
-const uploadBytes = async (
-  uploadUrl: string,
-  mimeType: string,
-  bytes: Uint8Array<ArrayBuffer>,
-): Promise<void> => {
-  const res = await fetch(uploadUrl, {
-    method: 'PUT',
-    headers: { 'content-type': mimeType },
-    body: bytes,
-  })
-  if (!res.ok) throw new Error(`direct upload failed with status ${res.status}`)
-}
+import { loginAs, resetDatabase } from '../../test/helpers'
+import {
+  confirmUpload as confirm,
+  ensurePublicBucket,
+  PNG_BYTES,
+  requestUpload,
+  uploadBytes,
+} from '../../test/media'
 
 const onlyMediaRow = async () => {
   const [row] = await db.select().from(media)
   if (!row) throw new Error('no media row')
   return row
 }
-
-const confirm = (mediaId: string, cookie: string) =>
-  app.request(`/media/${mediaId}/confirm`, jsonRequest({}, cookie))
 
 beforeAll(async () => {
   await ensurePublicBucket()
