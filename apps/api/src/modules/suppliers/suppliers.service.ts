@@ -1,7 +1,7 @@
 import { and, asc, eq } from 'drizzle-orm'
 
 import { db } from '../../db'
-import { isForeignKeyViolation, isUniqueViolation } from '../../db/errors'
+import { isReferenceViolation, isUniqueViolation } from '../../db/errors'
 import { AppError } from '../../lib/errors'
 import { getPublicUrl, getReady } from '../media/media.service'
 import type {
@@ -123,7 +123,7 @@ export const remove = async (id: string): Promise<void> => {
     .where(eq(suppliers.id, id))
     .returning({ id: suppliers.id })
     .catch((error: unknown) => {
-      if (isForeignKeyViolation(error)) {
+      if (isReferenceViolation(error)) {
         throw new AppError('SUPPLIER_IN_USE', 'Supplier still has products')
       }
       throw error

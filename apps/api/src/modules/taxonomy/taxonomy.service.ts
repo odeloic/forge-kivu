@@ -2,7 +2,7 @@ import { asc, eq } from 'drizzle-orm'
 
 import { db } from '../../db'
 import {
-  isForeignKeyViolation,
+  isReferenceViolation,
   isUniqueViolation,
   uniqueViolationConstraint,
 } from '../../db/errors'
@@ -112,7 +112,7 @@ export const removeCategory = async (id: string): Promise<void> => {
     .where(eq(categories.id, id))
     .returning({ id: categories.id })
     .catch((error: unknown) => {
-      if (isForeignKeyViolation(error)) {
+      if (isReferenceViolation(error)) {
         throw new AppError(
           'CATEGORY_IN_USE',
           'Category still has children or products',
@@ -189,7 +189,7 @@ export const removeAttribute = async (id: string): Promise<void> => {
     .where(eq(specAttributes.id, id))
     .returning({ id: specAttributes.id })
     .catch((error: unknown) => {
-      if (isForeignKeyViolation(error)) {
+      if (isReferenceViolation(error)) {
         throw new AppError(
           'ATTRIBUTE_IN_USE',
           'Spec attribute is still used by products',
