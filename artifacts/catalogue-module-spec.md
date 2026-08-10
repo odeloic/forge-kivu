@@ -8,7 +8,7 @@
 4. **Every product has at least one variant.** A product without options gets one default variant (no option values) at creation. This keeps price in exactly one place: the variant. The default variant is replaced when real variants are defined.
 5. **Price lives on the variant and is optional.** One numeric column. Currency is a single app-level setting, not a database column. No stock tracking — availability is handled outside the system.
 6. **Specs are structured values on the product**, keyed by the shared attributes from taxonomy. Values are stored as text and filtered by equality. Deferred: numeric range filters (the `unit` on the attribute is what makes them possible later).
-7. **Draft/published status gates public exposure.** Public endpoints serve only published products of visible suppliers. Draft is the default.
+7. **Three statuses gate public exposure: `draft`, `published`, `not_available`.** Public endpoints serve only published products of visible suppliers. Draft is the default and means never been live; `not_available` means was live, now retired. Once published, a product never returns to draft: `unpublish` moves it to `not_available`, `publish` brings it back. Retiring is the normal way to pull a product; delete remains for mistakes and is blocked while a live project references its variants (projects spec).
 8. **Writes to options, variants, specs, and media are replace-style (`PUT`).** The admin screen submits the whole set; the service diffs and applies. Granular per-row routes were rejected: they multiply endpoints and invite half-applied states.
 9. **`product_media` lives here, not in media** — per the media spec, linking tables belong to the module that owns the products. Only `ready` media can be attached, checked through `media.getReady`.
 10. **Deleting a product cascades within the module** (options, values, variants, specs, media links). Media rows and files are untouched — the media module owns those.
@@ -36,7 +36,7 @@ products
 ├── name         text
 ├── slug         text            unique (supplierId, slug)
 ├── description  text (nullable)
-├── status       'draft' | 'published'
+├── status       'draft' | 'published' | 'not_available'
 ├── createdAt
 └── updatedAt
 
@@ -144,6 +144,7 @@ Build: `publish`, `unpublish`, both routes, `listPublished` with filters and pag
 Acceptance criteria:
 - A draft product is absent from the public list and its detail URL returns 404, even with an admin session.
 - After publish, an anonymous request finds it in the list and on `/catalogue/products/:supplierSlug/:productSlug` with variants, specs, and media URLs.
+- `unpublish` sets `not_available` and removes the product from public responses; `publish` restores it. A `not_available` product never shows `draft` again.
 - Hiding the supplier removes all its published products from public responses.
 - `?category=floor-tiles` returns products of that category and its descendants; `?spec.material=Ceramic` narrows to matching products; combined filters intersect.
 - Page size is capped; page 2 returns the next slice and a total count.
