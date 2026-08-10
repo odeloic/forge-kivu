@@ -19,6 +19,10 @@ import {
 } from './modules/catalogue/catalogue.routes'
 import { adminMediaRoutes, mediaRoutes } from './modules/media/media.routes'
 import {
+  adminSettingsRoutes,
+  settingsRoutes,
+} from './modules/settings/settings.routes'
+import {
   adminSupplierRoutes,
   supplierRoutes,
 } from './modules/suppliers/suppliers.routes'
@@ -32,6 +36,7 @@ const adminRoutes = new Hono()
   .use('*', auth, requireRole(ROLES.ADMIN))
   .route('/media', adminMediaRoutes)
   .route('/products', adminCatalogueRoutes)
+  .route('/settings', adminSettingsRoutes)
   .route('/suppliers', adminSupplierRoutes)
   .route('/', adminTaxonomyRoutes)
 
@@ -69,6 +74,7 @@ export const app = new Hono<{ Variables: RequestIdVariables }>()
   .route('/auth', authRoutes)
   .route('/catalogue', catalogueRoutes)
   .route('/media', mediaRoutes)
+  .route('/settings', settingsRoutes)
   .route('/suppliers', supplierRoutes)
   .route('/', taxonomyRoutes)
   .route('/admin', adminRoutes)
