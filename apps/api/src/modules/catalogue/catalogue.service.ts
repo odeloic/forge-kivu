@@ -1,7 +1,7 @@
 import { and, asc, count, desc, eq, exists, inArray, sql } from 'drizzle-orm'
 
 import { db } from '../../db'
-import { isUniqueViolation } from '../../db/errors'
+import { isReferenceViolation, isUniqueViolation } from '../../db/errors'
 import { AppError } from '../../lib/errors'
 import { getPublicUrl, getReady } from '../media/media.service'
 import {
@@ -37,6 +37,8 @@ import {
   productVariants,
   variantOptionValues,
 } from './catalogue.tables'
+
+export { PRODUCT_STATUSES, type ProductStatus }
 
 export type Product = typeof products.$inferSelect
 
@@ -119,6 +121,13 @@ const requireRef = (map: Map<string, ProductRef>, id: string): ProductRef => {
 const asSlugConflict = (error: unknown): never => {
   if (isUniqueViolation(error)) {
     throw new AppError('SLUG_TAKEN', 'Slug already in use for this supplier')
+  }
+  throw error
+}
+
+const asVariantInUse = (error: unknown): never => {
+  if (isReferenceViolation(error)) {
+    throw new AppError('VARIANT_IN_USE', 'A variant is still used by a project')
   }
   throw error
 }
@@ -463,6 +472,7 @@ export const removeProduct = async (id: string): Promise<void> => {
     .delete(products)
     .where(eq(products.id, id))
     .returning({ id: products.id })
+    .catch(asVariantInUse)
 
   if (deleted.length === 0) {
     throw new AppError('NOT_FOUND', 'Product not found')
@@ -496,33 +506,35 @@ export const setOptions = async (
 ): Promise<ProductDetail> => {
   const product = await requireProduct(productId)
 
-  await db.transaction(async (tx) => {
-    await tx
-      .delete(productOptions)
-      .where(eq(productOptions.productId, productId))
-    await tx
-      .delete(productVariants)
-      .where(eq(productVariants.productId, productId))
+  await db
+    .transaction(async (tx) => {
+      await tx
+        .delete(productOptions)
+        .where(eq(productOptions.productId, productId))
+      await tx
+        .delete(productVariants)
+        .where(eq(productVariants.productId, productId))
 
-    for (const [index, option] of input.options.entries()) {
-      const [row] = await tx
-        .insert(productOptions)
-        .values({ productId, name: option.name, sortOrder: index })
-        .returning({ id: productOptions.id })
+      for (const [index, option] of input.options.entries()) {
+        const [row] = await tx
+          .insert(productOptions)
+          .values({ productId, name: option.name, sortOrder: index })
+          .returning({ id: productOptions.id })
 
-      if (!row) throw new Error('setOptions failed: insert returned no row')
+        if (!row) throw new Error('setOptions failed: insert returned no row')
 
-      await tx.insert(productOptionValues).values(
-        option.values.map((value, order) => ({
-          optionId: row.id,
-          value,
-          sortOrder: order,
-        })),
-      )
-    }
+        await tx.insert(productOptionValues).values(
+          option.values.map((value, order) => ({
+            optionId: row.id,
+            value,
+            sortOrder: order,
+          })),
+        )
+      }
 
-    await tx.insert(productVariants).values({ productId })
-  })
+      await tx.insert(productVariants).values({ productId })
+    })
+    .catch(asVariantInUse)
 
   return buildDetail(product)
 }
@@ -574,35 +586,37 @@ export const setVariants = async (
     if (variant.imageMediaId) await assertReadyMedia(variant.imageMediaId)
   }
 
-  await db.transaction(async (tx) => {
-    await tx
-      .delete(productVariants)
-      .where(eq(productVariants.productId, productId))
+  await db
+    .transaction(async (tx) => {
+      await tx
+        .delete(productVariants)
+        .where(eq(productVariants.productId, productId))
 
-    for (const [index, variant] of input.variants.entries()) {
-      const [row] = await tx
-        .insert(productVariants)
-        .values({
-          productId,
-          sku: variant.sku ?? null,
-          price: variant.price ?? null,
-          imageMediaId: variant.imageMediaId ?? null,
-          sortOrder: index,
-        })
-        .returning({ id: productVariants.id })
+      for (const [index, variant] of input.variants.entries()) {
+        const [row] = await tx
+          .insert(productVariants)
+          .values({
+            productId,
+            sku: variant.sku ?? null,
+            price: variant.price ?? null,
+            imageMediaId: variant.imageMediaId ?? null,
+            sortOrder: index,
+          })
+          .returning({ id: productVariants.id })
 
-      if (!row) throw new Error('setVariants failed: insert returned no row')
+        if (!row) throw new Error('setVariants failed: insert returned no row')
 
-      if (variant.optionValueIds.length > 0) {
-        await tx.insert(variantOptionValues).values(
-          variant.optionValueIds.map((optionValueId) => ({
-            variantId: row.id,
-            optionValueId,
-          })),
-        )
+        if (variant.optionValueIds.length > 0) {
+          await tx.insert(variantOptionValues).values(
+            variant.optionValueIds.map((optionValueId) => ({
+              variantId: row.id,
+              optionValueId,
+            })),
+          )
+        }
       }
-    }
-  })
+    })
+    .catch(asVariantInUse)
 
   return buildDetail(product)
 }
@@ -661,6 +675,86 @@ export const setMedia = async (
 
   return buildDetail(product)
 }
+
+export type VariantRef = {
+  id: string
+  sku: string | null
+  price: number | null
+  label: string | null
+  product: { id: string; name: string; status: ProductStatus }
+}
+
+const variantLabels = async (
+  variantIds: string[],
+): Promise<Map<string, string>> => {
+  const rows = await db
+    .select({
+      variantId: variantOptionValues.variantId,
+      value: productOptionValues.value,
+    })
+    .from(variantOptionValues)
+    .innerJoin(
+      productOptionValues,
+      eq(productOptionValues.id, variantOptionValues.optionValueId),
+    )
+    .innerJoin(
+      productOptions,
+      eq(productOptions.id, productOptionValues.optionId),
+    )
+    .where(inArray(variantOptionValues.variantId, variantIds))
+    .orderBy(asc(productOptions.sortOrder))
+
+  const labels = new Map<string, string>()
+  for (const row of rows) {
+    const current = labels.get(row.variantId)
+    labels.set(row.variantId, current ? `${current} / ${row.value}` : row.value)
+  }
+  return labels
+}
+
+export const getVariantRefs = async (
+  variantIds: string[],
+): Promise<Map<string, VariantRef>> => {
+  if (variantIds.length === 0) return new Map()
+
+  const [rows, labels] = await Promise.all([
+    db
+      .select({
+        id: productVariants.id,
+        sku: productVariants.sku,
+        price: productVariants.price,
+        productId: products.id,
+        productName: products.name,
+        productStatus: products.status,
+      })
+      .from(productVariants)
+      .innerJoin(products, eq(products.id, productVariants.productId))
+      .where(inArray(productVariants.id, variantIds)),
+    variantLabels(variantIds),
+  ])
+
+  return new Map(
+    rows.map((row) => [
+      row.id,
+      {
+        id: row.id,
+        sku: row.sku,
+        price: row.price,
+        label: labels.get(row.id) ?? null,
+        product: {
+          id: row.productId,
+          name: row.productName,
+          status: row.productStatus,
+        },
+      },
+    ]),
+  )
+}
+
+export const getVariantRef = async (
+  variantId: string,
+): Promise<VariantRef | null> =>
+  (await getVariantRefs([variantId])).get(variantId) ?? null
 
 export const getForAdmin = async (id: string): Promise<ProductDetail> =>
   buildDetail(await requireProduct(id))

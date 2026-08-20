@@ -13,11 +13,13 @@ import { auth } from './middleware/auth'
 import { requireRole } from './middleware/require-role'
 import { authRoutes } from './modules/auth/auth.routes'
 import { ROLES } from './modules/auth/auth.service'
+import { boqRoutes } from './modules/boq/boq.routes'
 import {
   adminCatalogueRoutes,
   catalogueRoutes,
 } from './modules/catalogue/catalogue.routes'
 import { adminMediaRoutes, mediaRoutes } from './modules/media/media.routes'
+import { projectRoutes } from './modules/projects/projects.routes'
 import {
   adminSettingsRoutes,
   settingsRoutes,
@@ -74,6 +76,8 @@ export const app = new Hono<{ Variables: RequestIdVariables }>()
   .route('/auth', authRoutes)
   .route('/catalogue', catalogueRoutes)
   .route('/media', mediaRoutes)
+  .route('/projects', projectRoutes)
+  .route('/', boqRoutes)
   .route('/settings', settingsRoutes)
   .route('/suppliers', supplierRoutes)
   .route('/', taxonomyRoutes)

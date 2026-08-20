@@ -18,17 +18,17 @@ const BASIC = { email: 'ada@example.com', password: 'correct horse' }
 const SEED = { currency: 'RWF', locale: 'en-RW', language: 'en' }
 
 const patchSettings = (body: unknown, cookie?: string) =>
-  app.request('/admin/settings', { ...jsonRequest(body, cookie), method: 'PATCH' })
+  app.request('/admin/settings', {
+    ...jsonRequest(body, cookie),
+    method: 'PATCH',
+  })
 
 const getSettings = () => app.request('/settings')
 
 beforeEach(resetDatabase)
 
 afterEach(async () => {
-  await db
-    .update(platformSettings)
-    .set(SEED)
-    .where(eq(platformSettings.id, 1))
+  await db.update(platformSettings).set(SEED).where(eq(platformSettings.id, 1))
 })
 
 describe('GET /settings', () => {

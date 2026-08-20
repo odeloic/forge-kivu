@@ -29,6 +29,7 @@
     "@forge-kivu/types": "workspace:*",
     "@hono/zod-validator": "catalog:",
     "drizzle-orm": "catalog:",
+    "exceljs": "catalog:",
     "hono": "catalog:",
     "pino": "catalog:",
     "postgres": "catalog:",
