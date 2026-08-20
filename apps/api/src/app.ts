@@ -1,11 +1,10 @@
-import { zValidator } from '@hono/zod-validator'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { csrf } from 'hono/csrf'
 import { HTTPException } from 'hono/http-exception'
 import { requestId, type RequestIdVariables } from 'hono/request-id'
 
-import { createTodoSchema, makeErrorResponse } from '@forge-kivu/types'
+import { makeErrorResponse } from '@forge-kivu/types'
 
 import { AppError } from './lib/errors'
 import { logger } from './lib/logger'
@@ -32,7 +31,6 @@ import {
   adminTaxonomyRoutes,
   taxonomyRoutes,
 } from './modules/taxonomy/taxonomy.routes'
-import { todos } from './todos'
 
 const adminRoutes = new Hono()
   .use('*', auth, requireRole(ROLES.ADMIN))
@@ -82,9 +80,5 @@ export const app = new Hono<{ Variables: RequestIdVariables }>()
   .route('/suppliers', supplierRoutes)
   .route('/', taxonomyRoutes)
   .route('/admin', adminRoutes)
-  .get('/todos', (c) => c.json(todos.list()))
-  .post('/todos', zValidator('json', createTodoSchema), (c) =>
-    c.json(todos.create(c.req.valid('json')), 201),
-  )
 
 export type AppType = typeof app
