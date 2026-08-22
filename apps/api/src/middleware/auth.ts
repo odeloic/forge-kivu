@@ -18,10 +18,10 @@ export type AuthEnv = {
 
 export const auth = createMiddleware<AuthEnv>(async (c, next) => {
   const token = getCookie(c, SESSION_COOKIE)
-  if (!token) throw new AppError('UNAUTHENTICATED', 'Unauthorized')
+  if (!token) throw new AppError('UNAUTHENTICATED')
 
   const result = await validateSession(token)
-  if (!result) throw new AppError('UNAUTHENTICATED', 'Unauthorized')
+  if (!result) throw new AppError('UNAUTHENTICATED')
 
   c.set('user', result.user)
   c.set('session', result.session)

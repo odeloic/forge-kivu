@@ -4,14 +4,13 @@ import { csrf } from 'hono/csrf'
 import { HTTPException } from 'hono/http-exception'
 import { requestId, type RequestIdVariables } from 'hono/request-id'
 
-import { makeErrorResponse } from '@forge-kivu/types'
+import { makeErrorResponse, ROLES } from '@forge-kivu/types'
 
 import { AppError } from './lib/errors'
 import { logger } from './lib/logger'
 import { auth } from './middleware/auth'
 import { requireRole } from './middleware/require-role'
 import { authRoutes } from './modules/auth/auth.routes'
-import { ROLES } from './modules/auth/auth.service'
 import { boqRoutes } from './modules/boq/boq.routes'
 import {
   adminCatalogueRoutes,
@@ -52,12 +51,9 @@ export const app = new Hono<{ Variables: RequestIdVariables }>()
     }
     if (error instanceof AppError) {
       const level = error.status >= 500 ? 'error' : 'warn'
-      logger[level](
-        { ...context, code: error.code, status: error.status },
-        error.message,
-      )
+      logger[level]({ ...context, status: error.status }, error.code)
       return c.json(
-        makeErrorResponse(error.code, error.message, context.requestId),
+        makeErrorResponse(error.code, context.requestId),
         error.status,
       )
     }
@@ -66,10 +62,7 @@ export const app = new Hono<{ Variables: RequestIdVariables }>()
       return error.getResponse()
     }
     logger.error({ ...context, err: error }, 'unhandled error')
-    return c.json(
-      makeErrorResponse('INTERNAL', 'Internal server error', context.requestId),
-      500,
-    )
+    return c.json(makeErrorResponse('INTERNAL', context.requestId), 500)
   })
   .route('/auth', authRoutes)
   .route('/catalogue', catalogueRoutes)

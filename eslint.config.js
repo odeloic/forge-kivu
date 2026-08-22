@@ -14,7 +14,10 @@ export default [
   ...node,
   ...vue,
   {
-    files: ['apps/web/app/{pages,layouts}/**/*.vue'],
+    files: [
+      'apps/web/app/{app,error}.vue',
+      'apps/web/app/{pages,layouts}/**/*.vue',
+    ],
     rules: {
       'vue/multi-word-component-names': 'off',
     },

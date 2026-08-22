@@ -1,11 +1,6 @@
 import { pgEnum, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core'
 
-export const ROLES = {
-  BASIC: 'basic',
-  ADMIN: 'admin',
-} as const
-
-export type Role = (typeof ROLES)[keyof typeof ROLES]
+import { ROLES } from '@forge-kivu/types'
 
 export const userRole = pgEnum('user_role', [ROLES.BASIC, ROLES.ADMIN])
 

@@ -20,7 +20,7 @@ export const supplierRoutes = new Hono()
   .get('/', async (c) => c.json(await listVisible()))
   .get('/:slug', async (c) => {
     const supplier = await getBySlug(c.req.param('slug'))
-    if (!supplier) throw new AppError('NOT_FOUND', 'Supplier not found')
+    if (!supplier) throw new AppError('NOT_FOUND')
     return c.json(supplier)
   })
 

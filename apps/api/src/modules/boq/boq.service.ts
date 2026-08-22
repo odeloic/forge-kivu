@@ -52,47 +52,24 @@ const totalOf = (items: BoqItem[]): number =>
   items.reduce((sum, item) => sum + lineTotalCents(item), 0) / 100
 
 const freezeItems = (items: ProjectItem[]): FrozenItem[] => {
-  if (items.length === 0) {
-    throw new AppError('BOQ_NOT_GENERATABLE', 'Project has no items')
-  }
+  if (items.length === 0) throw new AppError('BOQ_NOT_GENERATABLE')
 
-  const unpriced: string[] = []
-  const unpublished: string[] = []
-  const frozen: FrozenItem[] = []
-
-  for (const [index, item] of items.entries()) {
-    const name = itemName(item)
-    if (item.product.status !== PRODUCT_STATUSES.PUBLISHED) {
-      unpublished.push(name)
+  return items.map((item, index) => {
+    if (
+      item.product.status !== PRODUCT_STATUSES.PUBLISHED ||
+      item.price === null
+    ) {
+      throw new AppError('BOQ_NOT_GENERATABLE')
     }
-    if (item.price === null) {
-      unpriced.push(name)
-      continue
-    }
-    frozen.push({
+    return {
       variantId: item.variantId,
-      name,
+      name: itemName(item),
       sku: item.sku,
       unitPrice: item.price,
       quantity: item.quantity,
       sortOrder: index,
-    })
-  }
-
-  const problems = [
-    ...(unpriced.length > 0 ? [`missing a price: ${unpriced.join(', ')}`] : []),
-    ...(unpublished.length > 0
-      ? [`not published: ${unpublished.join(', ')}`]
-      : []),
-  ]
-  if (problems.length > 0) {
-    throw new AppError(
-      'BOQ_NOT_GENERATABLE',
-      `Cannot generate a BOQ: ${problems.join('; ')}`,
-    )
-  }
-
-  return frozen
+    }
+  })
 }
 
 const requireOwnedProject = async (
@@ -100,7 +77,7 @@ const requireOwnedProject = async (
   ownerId: string,
 ): Promise<Project> => {
   const project = await findOwnedProject(projectId, ownerId)
-  if (!project) throw new AppError('NOT_FOUND', 'Project not found')
+  if (!project) throw new AppError('NOT_FOUND')
   return project
 }
 
@@ -253,7 +230,7 @@ export const buildExport = async (
   format: ExportFormat,
 ): Promise<ExportFile> => {
   const found = await findOwnedBoq(id, ownerId)
-  if (!found) throw new AppError('NOT_FOUND', 'BOQ not found')
+  if (!found) throw new AppError('NOT_FOUND')
 
   const items = await loadItems(id)
   const buffer =

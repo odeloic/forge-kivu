@@ -32,7 +32,7 @@ export const boqRoutes = new Hono()
   )
   .get('/boqs/:id', auth, zValidator('param', boqIdParamSchema), async (c) => {
     const boq = await getOwned(c.req.valid('param').id, c.get('user').id)
-    if (!boq) throw new AppError('NOT_FOUND', 'BOQ not found')
+    if (!boq) throw new AppError('NOT_FOUND')
     return c.json(boq)
   })
   .get(

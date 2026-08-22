@@ -1,20 +1,14 @@
 import { eq } from 'drizzle-orm'
 import type { CookieOptions } from 'hono/utils/cookie'
 
+import type { Role } from '@forge-kivu/types'
+
 import { db } from '../../db'
 import { isUniqueViolation } from '../../db/errors'
 import { env } from '../../env'
 import { AppError } from '../../lib/errors'
 import { sendMail } from '../../lib/mail'
-import {
-  passwordResetTokens,
-  sessions,
-  users,
-  ROLES,
-  type Role,
-} from './auth.tables'
-
-export { ROLES, type Role }
+import { passwordResetTokens, sessions, users } from './auth.tables'
 
 export const SESSION_COOKIE = 'session'
 
@@ -94,7 +88,7 @@ export const signup = async (
     .returning({ id: users.id })
     .catch((error: unknown) => {
       if (isUniqueViolation(error)) {
-        throw new AppError('EMAIL_TAKEN', 'Email already registered')
+        throw new AppError('EMAIL_TAKEN')
       }
       throw error
     })

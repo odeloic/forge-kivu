@@ -1,3 +1,5 @@
+import { z } from 'zod'
+
 export const errorCodes = {
   UNAUTHENTICATED: 401,
   INVALID_CREDENTIALS: 401,
@@ -29,16 +31,20 @@ export const errorCodes = {
 
 export type ErrorCode = keyof typeof errorCodes
 
-export type ErrorResponse = {
-  error: {
-    code: ErrorCode
-    message: string
-    requestId?: string
-  }
-}
+export const errorCodeSchema = z.enum(
+  Object.keys(errorCodes) as [ErrorCode, ...ErrorCode[]],
+)
+
+export const errorResponseSchema = z.object({
+  error: z.object({
+    code: errorCodeSchema,
+    requestId: z.string().optional(),
+  }),
+})
+
+export type ErrorResponse = z.infer<typeof errorResponseSchema>
 
 export const makeErrorResponse = (
   code: ErrorCode,
-  message: string,
   requestId?: string,
-): ErrorResponse => ({ error: { code, message, requestId } })
+): ErrorResponse => ({ error: { code, requestId } })

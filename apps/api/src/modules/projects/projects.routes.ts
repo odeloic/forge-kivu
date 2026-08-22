@@ -28,7 +28,7 @@ export const projectRoutes = new Hono()
   .get('/', async (c) => c.json(await list(c.get('user').id)))
   .get('/:id', zValidator('param', projectIdParamSchema), async (c) => {
     const project = await getOwned(c.req.valid('param').id, c.get('user').id)
-    if (!project) throw new AppError('NOT_FOUND', 'Project not found')
+    if (!project) throw new AppError('NOT_FOUND')
     return c.json(project)
   })
   .patch(

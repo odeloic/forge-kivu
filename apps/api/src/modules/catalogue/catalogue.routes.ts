@@ -40,7 +40,7 @@ export const catalogueRoutes = new Hono()
     async (c) => {
       const { supplierSlug, productSlug } = c.req.valid('param')
       const product = await getPublished(supplierSlug, productSlug)
-      if (!product) throw new AppError('NOT_FOUND', 'Product not found')
+      if (!product) throw new AppError('NOT_FOUND')
       return c.json(product)
     },
   )

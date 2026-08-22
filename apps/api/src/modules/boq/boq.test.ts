@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { app } from '../../app'
 import { db } from '../../db'
 import { jsonRequest, loginAs, resetDatabase } from '../../test/helpers'
-import { ROLES } from '../auth/auth.service'
+import { ROLES } from '@forge-kivu/types'
 import { productVariants } from '../catalogue/catalogue.tables'
 import { boqItems } from './boq.tables'
 
@@ -240,7 +240,7 @@ describe('generate a boq', () => {
     })
   })
 
-  it('returns 422 naming an unpriced variant', async () => {
+  it('returns 422 for an unpriced variant', async () => {
     const admin = await loginAs(ADMIN)
     const { variantId } = await seededProduct(admin, 'bare-tile', null)
     const owner = await loginAs(OWNER)
@@ -250,12 +250,12 @@ describe('generate a boq', () => {
     const res = await postBoq(projectId, owner)
 
     expect(res.status).toBe(422)
-    const body = (await res.json()) as { error: { message: string } }
-    expect(body.error.message).toContain('Product bare-tile')
-    expect(body.error.message).toContain('price')
+    expect(await res.json()).toMatchObject({
+      error: { code: 'BOQ_NOT_GENERATABLE' },
+    })
   })
 
-  it('returns 422 naming an item whose product is retired', async () => {
+  it('returns 422 for an item whose product is retired', async () => {
     const fixture = await projectWithItem()
     const retired = await app.request(
       `/admin/products/${fixture.productId}/unpublish`,
@@ -266,9 +266,9 @@ describe('generate a boq', () => {
     const res = await postBoq(fixture.projectId, fixture.owner)
 
     expect(res.status).toBe(422)
-    const body = (await res.json()) as { error: { message: string } }
-    expect(body.error.message).toContain('Product cement-tile')
-    expect(body.error.message).toContain('not published')
+    expect(await res.json()).toMatchObject({
+      error: { code: 'BOQ_NOT_GENERATABLE' },
+    })
   })
 
   it('gives concurrent calls distinct revisions', async () => {

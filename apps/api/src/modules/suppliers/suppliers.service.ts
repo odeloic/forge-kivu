@@ -24,7 +24,7 @@ const withLogoUrl = async (row: Supplier): Promise<SupplierResponse> => {
 
 const requireReadyLogo = async (mediaId: string): Promise<void> => {
   if (!(await getReady(mediaId))) {
-    throw new AppError('MEDIA_NOT_READY', 'Logo media is not ready')
+    throw new AppError('MEDIA_NOT_READY')
   }
 }
 
@@ -44,7 +44,7 @@ export const create = async (
     .returning()
     .catch((error: unknown) => {
       if (isUniqueViolation(error)) {
-        throw new AppError('SLUG_TAKEN', 'Slug already in use')
+        throw new AppError('SLUG_TAKEN')
       }
       throw error
     })
@@ -106,13 +106,13 @@ export const update = async (
     .returning()
     .catch((error: unknown) => {
       if (isUniqueViolation(error)) {
-        throw new AppError('SLUG_TAKEN', 'Slug already in use')
+        throw new AppError('SLUG_TAKEN')
       }
       throw error
     })
 
   const [row] = updated
-  if (!row) throw new AppError('NOT_FOUND', 'Supplier not found')
+  if (!row) throw new AppError('NOT_FOUND')
 
   return withLogoUrl(row)
 }
@@ -124,12 +124,12 @@ export const remove = async (id: string): Promise<void> => {
     .returning({ id: suppliers.id })
     .catch((error: unknown) => {
       if (isReferenceViolation(error)) {
-        throw new AppError('SUPPLIER_IN_USE', 'Supplier still has products')
+        throw new AppError('SUPPLIER_IN_USE')
       }
       throw error
     })
 
   if (deleted.length === 0) {
-    throw new AppError('NOT_FOUND', 'Supplier not found')
+    throw new AppError('NOT_FOUND')
   }
 }

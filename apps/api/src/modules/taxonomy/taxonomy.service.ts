@@ -25,14 +25,14 @@ export type SpecAttribute = typeof specAttributes.$inferSelect
 
 const asSlugConflict = (error: unknown): never => {
   if (isUniqueViolation(error)) {
-    throw new AppError('SLUG_TAKEN', 'Slug already in use')
+    throw new AppError('SLUG_TAKEN')
   }
   throw error
 }
 
 const asAttributeConflict = (error: unknown): never => {
   if (uniqueViolationConstraint(error) === SPEC_ATTRIBUTE_NAME_INDEX) {
-    throw new AppError('NAME_TAKEN', 'Attribute name already in use')
+    throw new AppError('NAME_TAKEN')
   }
   return asSlugConflict(error)
 }
@@ -53,15 +53,12 @@ const assertParentUsable = async (
 ): Promise<void> => {
   let cursor = await getCategoryById(parentId)
   if (!cursor) {
-    throw new AppError('PARENT_NOT_FOUND', 'Parent category not found')
+    throw new AppError('PARENT_NOT_FOUND')
   }
 
   while (cursor) {
     if (cursor.id === childId) {
-      throw new AppError(
-        'PARENT_CYCLE',
-        'A category cannot be moved under itself or its own descendant',
-      )
+      throw new AppError('PARENT_CYCLE')
     }
     cursor = cursor.parentId ? await getCategoryById(cursor.parentId) : null
   }
@@ -101,7 +98,7 @@ export const updateCategory = async (
     .returning()
     .catch(asSlugConflict)
 
-  if (!row) throw new AppError('NOT_FOUND', 'Category not found')
+  if (!row) throw new AppError('NOT_FOUND')
 
   return row
 }
@@ -113,16 +110,13 @@ export const removeCategory = async (id: string): Promise<void> => {
     .returning({ id: categories.id })
     .catch((error: unknown) => {
       if (isReferenceViolation(error)) {
-        throw new AppError(
-          'CATEGORY_IN_USE',
-          'Category still has children or products',
-        )
+        throw new AppError('CATEGORY_IN_USE')
       }
       throw error
     })
 
   if (deleted.length === 0) {
-    throw new AppError('NOT_FOUND', 'Category not found')
+    throw new AppError('NOT_FOUND')
   }
 }
 
@@ -178,7 +172,7 @@ export const updateAttribute = async (
     .returning()
     .catch(asAttributeConflict)
 
-  if (!row) throw new AppError('NOT_FOUND', 'Spec attribute not found')
+  if (!row) throw new AppError('NOT_FOUND')
 
   return row
 }
@@ -190,16 +184,13 @@ export const removeAttribute = async (id: string): Promise<void> => {
     .returning({ id: specAttributes.id })
     .catch((error: unknown) => {
       if (isReferenceViolation(error)) {
-        throw new AppError(
-          'ATTRIBUTE_IN_USE',
-          'Spec attribute is still used by products',
-        )
+        throw new AppError('ATTRIBUTE_IN_USE')
       }
       throw error
     })
 
   if (deleted.length === 0) {
-    throw new AppError('NOT_FOUND', 'Spec attribute not found')
+    throw new AppError('NOT_FOUND')
   }
 }
 

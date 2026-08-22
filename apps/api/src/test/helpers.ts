@@ -3,7 +3,7 @@ import { eq, sql } from 'drizzle-orm'
 import { app } from '../app'
 import { db } from '../db'
 import { outbox } from '../lib/mail'
-import { ROLES, type Role } from '../modules/auth/auth.service'
+import { ROLES, type Role } from '@forge-kivu/types'
 import { users } from '../modules/auth/auth.tables'
 
 export type TestUser = {

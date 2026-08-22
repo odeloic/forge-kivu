@@ -10,7 +10,7 @@ import {
   createReadyMedia,
   ensurePublicBucket,
 } from '../../test/media'
-import { ROLES } from '../auth/auth.service'
+import { ROLES } from '@forge-kivu/types'
 import { suppliers } from './suppliers.tables'
 
 const ADMIN = {

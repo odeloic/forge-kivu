@@ -17,3 +17,4 @@ The codename for the project is forge-kivu! This is not the product name!
 
 ## Project documentation (specs, plans, etc...)
 - Every LLM generated specs, plans should live inside the artifacts/ directory
+- If the artifact specs has to be updated, then to keep the revisions visible, the old fact need to be struct-through, and the new fact beneath it.

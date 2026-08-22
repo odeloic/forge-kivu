@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { app } from '../../app'
 import { db } from '../../db'
 import { jsonRequest, loginAs, resetDatabase } from '../../test/helpers'
-import { ROLES } from '../auth/auth.service'
+import { ROLES } from '@forge-kivu/types'
 import { projectItems, projects } from './projects.tables'
 
 const OWNER = { email: 'owner@example.com', password: 'correct horse' }

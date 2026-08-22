@@ -31,7 +31,7 @@ export const authRoutes = new Hono()
     const { email, password } = c.req.valid('json')
     const token = await login(email, password)
     if (!token) {
-      throw new AppError('INVALID_CREDENTIALS', 'Invalid email or password')
+      throw new AppError('INVALID_CREDENTIALS')
     }
     setCookie(c, SESSION_COOKIE, token, sessionCookieOptions())
     return c.json({ ok: true }, 200)
@@ -57,7 +57,7 @@ export const authRoutes = new Hono()
     async (c) => {
       const { token, password } = c.req.valid('json')
       if (!(await resetPassword(token, password))) {
-        throw new AppError('INVALID_TOKEN', 'Invalid or expired token')
+        throw new AppError('INVALID_TOKEN')
       }
       deleteCookie(c, SESSION_COOKIE, { path: '/' })
       return c.body(null, 204)

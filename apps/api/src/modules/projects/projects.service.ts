@@ -42,7 +42,7 @@ export const findOwned = async (
 
 const requireOwned = async (id: string, ownerId: string): Promise<Project> => {
   const row = await findOwned(id, ownerId)
-  if (!row) throw new AppError('NOT_FOUND', 'Project not found')
+  if (!row) throw new AppError('NOT_FOUND')
   return row
 }
 
@@ -100,7 +100,7 @@ export const update = async (
     .where(ownedBy(id, ownerId))
     .returning()
 
-  if (!row) throw new AppError('NOT_FOUND', 'Project not found')
+  if (!row) throw new AppError('NOT_FOUND')
 
   return row
 }
@@ -129,7 +129,7 @@ export const remove = async (id: string, ownerId: string): Promise<void> => {
     .returning({ id: projects.id })
 
   if (deleted.length === 0) {
-    throw new AppError('NOT_FOUND', 'Project not found')
+    throw new AppError('NOT_FOUND')
   }
 }
 
@@ -142,9 +142,9 @@ export const setItem = async (
   await requireOwned(id, ownerId)
 
   const ref = await getVariantRef(variantId)
-  if (!ref) throw new AppError('NOT_FOUND', 'Variant not found')
+  if (!ref) throw new AppError('NOT_FOUND')
   if (ref.product.status !== PRODUCT_STATUSES.PUBLISHED) {
-    throw new AppError('PRODUCT_NOT_PUBLISHED', 'Product is not published')
+    throw new AppError('PRODUCT_NOT_PUBLISHED')
   }
 
   await db
@@ -183,7 +183,7 @@ export const removeItem = async (
     .returning({ variantId: projectItems.variantId })
 
   if (deleted.length === 0) {
-    throw new AppError('NOT_FOUND', 'Item not found')
+    throw new AppError('NOT_FOUND')
   }
 }
 

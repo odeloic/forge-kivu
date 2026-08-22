@@ -79,7 +79,7 @@ export const confirmUpload = async (
     .limit(1)
 
   if (!row || row.uploadedById !== userId) {
-    throw new AppError('NOT_FOUND', 'Media not found')
+    throw new AppError('NOT_FOUND')
   }
 
   if (row.status === MEDIA_STATUSES.READY) return row
@@ -88,16 +88,13 @@ export const confirmUpload = async (
     .send(new HeadObjectCommand({ Bucket: env.S3_BUCKET, Key: row.key }))
     .catch((error: unknown) => {
       if (isMissingObject(error)) {
-        throw new AppError('UPLOAD_INCOMPLETE', 'Object has not been uploaded')
+        throw new AppError('UPLOAD_INCOMPLETE')
       }
       throw error
     })
 
   if (head.ContentLength !== row.sizeBytes) {
-    throw new AppError(
-      'SIZE_MISMATCH',
-      'Uploaded size does not match the declared size',
-    )
+    throw new AppError('SIZE_MISMATCH')
   }
 
   const [ready] = await db
@@ -130,7 +127,7 @@ export const remove = async (mediaId: string): Promise<void> => {
     .where(eq(media.id, mediaId))
     .returning({ key: media.key })
 
-  if (!row) throw new AppError('NOT_FOUND', 'Media not found')
+  if (!row) throw new AppError('NOT_FOUND')
 
   await s3.send(
     new DeleteObjectCommand({ Bucket: env.S3_BUCKET, Key: row.key }),

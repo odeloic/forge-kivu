@@ -7,7 +7,7 @@ import { db } from '../../db'
 import { outbox } from '../../lib/mail'
 import { auth } from '../../middleware/auth'
 import { requireRole } from '../../middleware/require-role'
-import { ROLES } from './auth.service'
+import { ROLES } from '@forge-kivu/types'
 import { sessions, users } from './auth.tables'
 import {
   jsonRequest,
@@ -74,7 +74,7 @@ describe('signup', () => {
     )
     expect(duplicate.status).toBe(409)
     expect(await duplicate.json()).toMatchObject({
-      error: { code: 'EMAIL_TAKEN', message: 'Email already registered' },
+      error: { code: 'EMAIL_TAKEN' },
     })
   })
 
@@ -129,10 +129,7 @@ describe('login', () => {
     expect(unknownEmail.status).toBe(401)
 
     const invalidCredentials = {
-      error: {
-        code: 'INVALID_CREDENTIALS',
-        message: 'Invalid email or password',
-      },
+      error: { code: 'INVALID_CREDENTIALS' },
     }
     expect(await wrongPassword.json()).toMatchObject(invalidCredentials)
     expect(await unknownEmail.json()).toMatchObject(invalidCredentials)
@@ -180,7 +177,6 @@ describe('GET /auth/me', () => {
     expect(await res.json()).toEqual({
       error: {
         code: 'UNAUTHENTICATED',
-        message: 'Unauthorized',
         requestId: expect.any(String),
       },
     })
@@ -297,7 +293,7 @@ describe('password reset', () => {
     expect(first.status).toBe(204)
     expect(second.status).toBe(400)
     expect(await second.json()).toMatchObject({
-      error: { code: 'INVALID_TOKEN', message: 'Invalid or expired token' },
+      error: { code: 'INVALID_TOKEN' },
     })
 
     const login = await app.request(

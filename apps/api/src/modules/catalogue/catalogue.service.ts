@@ -120,33 +120,33 @@ const requireRef = (map: Map<string, ProductRef>, id: string): ProductRef => {
 
 const asSlugConflict = (error: unknown): never => {
   if (isUniqueViolation(error)) {
-    throw new AppError('SLUG_TAKEN', 'Slug already in use for this supplier')
+    throw new AppError('SLUG_TAKEN')
   }
   throw error
 }
 
 const asVariantInUse = (error: unknown): never => {
   if (isReferenceViolation(error)) {
-    throw new AppError('VARIANT_IN_USE', 'A variant is still used by a project')
+    throw new AppError('VARIANT_IN_USE')
   }
   throw error
 }
 
 const assertSupplier = async (supplierId: string): Promise<void> => {
   if (!(await getSupplierById(supplierId))) {
-    throw new AppError('SUPPLIER_NOT_FOUND', 'Supplier not found')
+    throw new AppError('SUPPLIER_NOT_FOUND')
   }
 }
 
 const assertCategory = async (categoryId: string): Promise<void> => {
   if (!(await getCategoryById(categoryId))) {
-    throw new AppError('CATEGORY_NOT_FOUND', 'Category not found')
+    throw new AppError('CATEGORY_NOT_FOUND')
   }
 }
 
 const assertReadyMedia = async (mediaId: string): Promise<void> => {
   if (!(await getReady(mediaId))) {
-    throw new AppError('MEDIA_NOT_READY', 'Media is not ready')
+    throw new AppError('MEDIA_NOT_READY')
   }
 }
 
@@ -200,7 +200,7 @@ const findProduct = async (id: string): Promise<Product | null> => {
 
 const requireProduct = async (id: string): Promise<Product> => {
   const row = await findProduct(id)
-  if (!row) throw new AppError('NOT_FOUND', 'Product not found')
+  if (!row) throw new AppError('NOT_FOUND')
   return row
 }
 
@@ -462,7 +462,7 @@ export const updateProduct = async (
     .returning()
     .catch(asSlugConflict)
 
-  if (!row) throw new AppError('NOT_FOUND', 'Product not found')
+  if (!row) throw new AppError('NOT_FOUND')
 
   return buildDetail(row)
 }
@@ -475,7 +475,7 @@ export const removeProduct = async (id: string): Promise<void> => {
     .catch(asVariantInUse)
 
   if (deleted.length === 0) {
-    throw new AppError('NOT_FOUND', 'Product not found')
+    throw new AppError('NOT_FOUND')
   }
 }
 
@@ -489,7 +489,7 @@ const setStatus = async (
     .where(eq(products.id, id))
     .returning()
 
-  if (!row) throw new AppError('NOT_FOUND', 'Product not found')
+  if (!row) throw new AppError('NOT_FOUND')
 
   return buildDetail(row)
 }
@@ -557,27 +557,18 @@ export const setVariants = async (
     const chosenOptions = variant.optionValueIds.map((valueId) => {
       const optionId = optionIdByValueId.get(valueId)
       if (!optionId) {
-        throw new AppError(
-          'OPTION_VALUE_NOT_FOUND',
-          'Option value does not belong to this product',
-        )
+        throw new AppError('OPTION_VALUE_NOT_FOUND')
       }
       return optionId
     })
 
     if (new Set(chosenOptions).size !== options.length) {
-      throw new AppError(
-        'VARIANT_INCOMPLETE',
-        'A variant must choose exactly one value for every option',
-      )
+      throw new AppError('VARIANT_INCOMPLETE')
     }
 
     const combination = [...variant.optionValueIds].sort().join('|')
     if (combinations.has(combination)) {
-      throw new AppError(
-        'VARIANT_DUPLICATE',
-        'Two variants share the same option combination',
-      )
+      throw new AppError('VARIANT_DUPLICATE')
     }
     combinations.add(combination)
   }
@@ -630,7 +621,7 @@ export const setSpecs = async (
   const known = new Set((await listAttributes()).map((row) => row.id))
   for (const spec of input.specs) {
     if (!known.has(spec.attributeId)) {
-      throw new AppError('ATTRIBUTE_NOT_FOUND', 'Spec attribute not found')
+      throw new AppError('ATTRIBUTE_NOT_FOUND')
     }
   }
 
