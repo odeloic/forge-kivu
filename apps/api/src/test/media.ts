@@ -1,4 +1,9 @@
-import { CreateBucketCommand, PutBucketPolicyCommand } from '@aws-sdk/client-s3'
+import {
+  CreateBucketCommand,
+  DeleteObjectsCommand,
+  ListObjectsV2Command,
+  PutBucketPolicyCommand,
+} from '@aws-sdk/client-s3'
 
 import { app } from '../app'
 import { env } from '../env'
@@ -32,6 +37,44 @@ export const ensurePublicBucket = async (): Promise<void> => {
       }),
     }),
   )
+}
+
+export const emptyBucket = async (): Promise<void> => {
+  if (!env.S3_BUCKET.endsWith('-test')) {
+    throw new Error(`refusing to empty non-test bucket ${env.S3_BUCKET}`)
+  }
+
+  let continuationToken: string | undefined
+
+  do {
+    const listed = await s3
+      .send(
+        new ListObjectsV2Command({
+          Bucket: env.S3_BUCKET,
+          ContinuationToken: continuationToken,
+        }),
+      )
+      .catch(() => null)
+
+    if (!listed) return
+
+    const objects = (listed.Contents ?? []).flatMap(({ Key }) =>
+      Key ? [{ Key }] : [],
+    )
+
+    if (objects.length > 0) {
+      await s3.send(
+        new DeleteObjectsCommand({
+          Bucket: env.S3_BUCKET,
+          Delete: { Objects: objects },
+        }),
+      )
+    }
+
+    continuationToken = listed.IsTruncated
+      ? listed.NextContinuationToken
+      : undefined
+  } while (continuationToken)
 }
 
 export const requestUpload = async (
