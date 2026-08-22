@@ -40,6 +40,7 @@
     "@forge-kivu/tsconfig": "workspace:*",
     "@types/bun": "catalog:",
     "drizzle-kit": "catalog:",
+    "yaml": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

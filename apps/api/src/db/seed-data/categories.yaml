@@ -1,0 +1,310 @@
+- name: 'Structural & Building Materials'
+  slug: structural-building-materials
+  children:
+    - name: 'Cement & Concrete'
+      slug: cement-concrete
+      children:
+        - name: Cement
+          slug: cement
+        - name: Precast Concrete
+          slug: precast-concrete
+    - name: 'Bricks & Blocks'
+      slug: bricks-blocks
+      children:
+        - name: Clay Bricks
+          slug: clay-bricks
+        - name: Concrete Blocks
+          slug: concrete-blocks
+    - name: 'Sand, Stone & Aggregates'
+      slug: sand-stone-aggregates
+      children:
+        - name: Sand
+          slug: sand
+        - name: Gravel
+          slug: gravel
+        - name: Building Stone
+          slug: building-stone
+    - name: 'Steel & Reinforcement'
+      slug: steel-reinforcement
+      children:
+        - name: Steel Bars
+          slug: steel-bars
+        - name: Steel Mesh
+          slug: steel-mesh
+    - name: 'Timber & Boards'
+      slug: timber-boards
+      children:
+        - name: Timber
+          slug: timber
+        - name: 'Plywood & Boards'
+          slug: plywood-boards
+
+- name: 'Roofing & Exterior'
+  slug: roofing-exterior
+  children:
+    - name: Roofing Sheets
+      slug: roofing-sheets
+      children:
+        - name: Metal Sheets
+          slug: metal-sheets
+        - name: Polycarbonate Sheets
+          slug: polycarbonate-sheets
+    - name: Roofing Tiles
+      slug: roofing-tiles
+      children:
+        - name: Clay Tiles
+          slug: clay-tiles
+        - name: Concrete Tiles
+          slug: concrete-tiles
+    - name: Roofing Accessories
+      slug: roofing-accessories
+      children:
+        - name: 'Ridges & Flashing'
+          slug: ridges-flashing
+        - name: Roofing Fixings
+          slug: roofing-fixings
+    - name: 'Gutters & Drainage'
+      slug: gutters-drainage
+      children:
+        - name: Gutters
+          slug: gutters
+        - name: Downpipes
+          slug: downpipes
+
+- name: 'Plumbing, Water & Sanitary'
+  slug: plumbing-water-sanitary
+  children:
+    - name: 'Pipes & Fittings'
+      slug: pipes-fittings
+      children:
+        - name: Water Pipes
+          slug: water-pipes
+        - name: Drainage Pipes
+          slug: drainage-pipes
+        - name: Pipe Fittings
+          slug: pipe-fittings
+    - name: Water Storage
+      slug: water-storage
+      children:
+        - name: Water Tanks
+          slug: water-tanks
+        - name: Tank Accessories
+          slug: tank-accessories
+    - name: 'Toilets & Basins'
+      slug: toilets-basins
+      children:
+        - name: Toilets
+          slug: toilets
+        - name: Cisterns
+          slug: cisterns
+        - name: Basins
+          slug: basins
+    - name: 'Taps & Showers'
+      slug: taps-showers
+      children:
+        - name: 'Taps & Mixers'
+          slug: taps-mixers
+        - name: Showers
+          slug: showers
+    - name: Sinks
+      slug: sinks
+      children:
+        - name: Kitchen Sinks
+          slug: kitchen-sinks
+        - name: Utility Sinks
+          slug: utility-sinks
+
+- name: 'Electrical, Lighting & Solar'
+  slug: electrical-lighting-solar
+  children:
+    - name: 'Wiring & Cables'
+      slug: wiring-cables
+      children:
+        - name: Electrical Cables
+          slug: electrical-cables
+        - name: Data Cables
+          slug: data-cables
+    - name: 'Switches & Sockets'
+      slug: switches-sockets
+      children:
+        - name: Switches
+          slug: switches
+        - name: Sockets
+          slug: sockets
+    - name: Lighting
+      slug: lighting
+      children:
+        - name: Indoor Lighting
+          slug: indoor-lighting
+        - name: Outdoor Lighting
+          slug: outdoor-lighting
+    - name: Electrical Protection
+      slug: electrical-protection
+      children:
+        - name: Circuit Breakers
+          slug: circuit-breakers
+        - name: Distribution Boards
+          slug: distribution-boards
+    - name: 'Solar & Backup Power'
+      slug: solar-backup-power
+      children:
+        - name: Solar Panels
+          slug: solar-panels
+        - name: Inverters
+          slug: inverters
+        - name: Solar Batteries
+          slug: solar-batteries
+
+- name: 'Doors, Windows & Glass'
+  slug: doors-windows-glass
+  children:
+    - name: Doors
+      slug: doors
+      children:
+        - name: Interior Doors
+          slug: interior-doors
+        - name: Exterior Doors
+          slug: exterior-doors
+    - name: Windows
+      slug: windows
+      children:
+        - name: Aluminium Windows
+          slug: aluminium-windows
+        - name: uPVC Windows
+          slug: upvc-windows
+        - name: Steel Windows
+          slug: steel-windows
+    - name: 'Door & Window Frames'
+      slug: door-window-frames
+      children:
+        - name: Door Frames
+          slug: door-frames
+        - name: Window Frames
+          slug: window-frames
+    - name: Glass
+      slug: glass
+      children:
+        - name: Clear Glass
+          slug: clear-glass
+        - name: Safety Glass
+          slug: safety-glass
+
+- name: 'Flooring, Walls & Finishes'
+  slug: flooring-walls-finishes
+  children:
+    - name: 'Floor & Wall Tiles'
+      slug: floor-wall-tiles
+      children:
+        - name: Floor Tiles
+          slug: floor-tiles
+        - name: Wall Tiles
+          slug: wall-tiles
+    - name: Paint
+      slug: paint
+      children:
+        - name: Interior Paint
+          slug: interior-paint
+        - name: Exterior Paint
+          slug: exterior-paint
+        - name: Primers
+          slug: primers
+    - name: Ceilings
+      slug: ceilings
+      children:
+        - name: Gypsum Boards
+          slug: gypsum-boards
+        - name: Ceiling Tiles
+          slug: ceiling-tiles
+    - name: 'Adhesives & Grout'
+      slug: adhesives-grout
+      children:
+        - name: Tile Adhesives
+          slug: tile-adhesives
+        - name: Grout
+          slug: grout
+        - name: Sealants
+          slug: sealants
+
+- name: 'Tools, Hardware & Fasteners'
+  slug: tools-hardware-fasteners
+  children:
+    - name: Hand Tools
+      slug: hand-tools
+      children:
+        - name: Hammers
+          slug: hammers
+        - name: Screwdrivers
+          slug: screwdrivers
+        - name: Spanners
+          slug: spanners
+    - name: Power Tools
+      slug: power-tools
+      children:
+        - name: Drills
+          slug: drills
+        - name: Grinders
+          slug: grinders
+        - name: Saws
+          slug: saws
+    - name: Fasteners
+      slug: fasteners
+      children:
+        - name: Nails
+          slug: nails
+        - name: Screws
+          slug: screws
+        - name: 'Bolts & Anchors'
+          slug: bolts-anchors
+    - name: Door Hardware
+      slug: door-hardware
+      children:
+        - name: 'Locks & Handles'
+          slug: locks-handles
+        - name: Hinges
+          slug: hinges
+    - name: Safety Equipment
+      slug: safety-equipment
+      children:
+        - name: 'Helmets & Eyewear'
+          slug: helmets-eyewear
+        - name: 'Gloves & Footwear'
+          slug: gloves-footwear
+
+- name: 'Furniture & Joinery'
+  slug: furniture-joinery
+  children:
+    - name: Living Room
+      slug: living-room
+      children:
+        - name: 'Sofas & Chairs'
+          slug: sofas-chairs
+        - name: Living Room Tables
+          slug: living-room-tables
+    - name: Bedroom
+      slug: bedroom
+      children:
+        - name: Beds
+          slug: beds
+        - name: Wardrobes
+          slug: wardrobes
+    - name: Dining
+      slug: dining
+      children:
+        - name: Dining Tables
+          slug: dining-tables
+        - name: Dining Chairs
+          slug: dining-chairs
+    - name: Office
+      slug: office
+      children:
+        - name: Desks
+          slug: desks
+        - name: Office Chairs
+          slug: office-chairs
+    - name: 'Kitchen & Storage'
+      slug: kitchen-storage
+      children:
+        - name: Kitchen Cabinets
+          slug: kitchen-cabinets
+        - name: Shelving
+          slug: shelving
