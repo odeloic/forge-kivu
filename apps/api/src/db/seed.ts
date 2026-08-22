@@ -9,6 +9,8 @@ import { env } from '../env'
 import { logger } from '../lib/logger'
 import { signup } from '../modules/auth/auth.service'
 import { users } from '../modules/auth/auth.tables'
+import { createSupplierSchema } from '../modules/suppliers/suppliers.schemas'
+import { suppliers } from '../modules/suppliers/suppliers.tables'
 import { createCategorySchema } from '../modules/taxonomy/taxonomy.schemas'
 import { categories } from '../modules/taxonomy/taxonomy.tables'
 
@@ -16,6 +18,13 @@ type SeedCategory = {
   name: string
   slug: string
   children?: SeedCategory[]
+}
+
+type SeedSupplier = {
+  name: string
+  slug: string
+  description?: string | null
+  visible: boolean
 }
 
 const seedCategoryFieldsSchema = createCategorySchema.pick({
@@ -51,6 +60,27 @@ const seedCategoriesSchema = z
     visit(roots)
   })
 
+const seedSuppliersSchema = z
+  .array(
+    createSupplierSchema
+      .pick({ name: true, slug: true, description: true })
+      .extend({ visible: z.boolean() }),
+  )
+  .min(1)
+  .superRefine((items, ctx) => {
+    const slugs = new Set<string>()
+
+    for (const item of items) {
+      if (slugs.has(item.slug)) {
+        ctx.addIssue({
+          code: 'custom',
+          message: `Duplicate supplier slug: ${item.slug}`,
+        })
+      }
+      slugs.add(item.slug)
+    }
+  })
+
 const seedEnvSchema = z.object({
   SEED_ADMIN_EMAIL: z.email().default('admin@forge-kivu.test'),
   SEED_ADMIN_PASSWORD: z.string().min(8).default('forge-kivu-admin'),
@@ -79,6 +109,14 @@ const loadSeedCategories = async (): Promise<SeedCategory[]> => {
   ).text()
 
   return seedCategoriesSchema.parse(parse(source))
+}
+
+const loadSeedSuppliers = async (): Promise<SeedSupplier[]> => {
+  const source = await Bun.file(
+    new URL('./seed-data/suppliers.yaml', import.meta.url),
+  ).text()
+
+  return seedSuppliersSchema.parse(parse(source))
 }
 
 const seedCategories = async (roots: SeedCategory[]): Promise<number> =>
@@ -117,6 +155,30 @@ const seedCategories = async (roots: SeedCategory[]): Promise<number> =>
     return seeded
   })
 
+const seedSuppliers = async (items: SeedSupplier[]): Promise<number> =>
+  db.transaction(async (tx) => {
+    for (const item of items) {
+      await tx
+        .insert(suppliers)
+        .values({
+          name: item.name,
+          slug: item.slug,
+          description: item.description ?? null,
+          visible: item.visible,
+        })
+        .onConflictDoUpdate({
+          target: suppliers.slug,
+          set: {
+            name: item.name,
+            description: item.description ?? null,
+            visible: item.visible,
+          },
+        })
+    }
+
+    return items.length
+  })
+
 if (env.NODE_ENV === 'production') {
   logger.error('db:seed is not available in production')
   process.exit(1)
@@ -124,6 +186,7 @@ if (env.NODE_ENV === 'production') {
 
 const seedEnv = seedEnvSchema.parse(process.env)
 const categoryRoots = await loadSeedCategories()
+const supplierProfiles = await loadSeedSuppliers()
 
 const admin = await seedUser(
   seedEnv.SEED_ADMIN_EMAIL,
@@ -136,7 +199,11 @@ const basic = await seedUser(
   ROLES.BASIC,
 )
 const categoryCount = await seedCategories(categoryRoots)
+const supplierCount = await seedSuppliers(supplierProfiles)
 
-logger.info({ admin, basic, categoryCount }, 'seeded development data')
+logger.info(
+  { admin, basic, categoryCount, supplierCount },
+  'seeded development data',
+)
 
 await client.end()

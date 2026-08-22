@@ -1,0 +1,9 @@
+- name: Kigali Build Supply
+  slug: kigali-build-supply
+  description: Building materials, hardware, and finishing products for projects across Rwanda.
+  visible: true
+
+- name: Kivu Home & Interiors
+  slug: kivu-home-interiors
+  description: Furniture, lighting, sanitary ware, doors, windows, and interior finishes for Rwandan homes and businesses.
+  visible: true
