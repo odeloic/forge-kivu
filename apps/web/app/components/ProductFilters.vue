@@ -1,33 +1,32 @@
 <script setup lang="ts">
+import type { ProductFacets } from '@forge-kivu/api-client'
+
+type AttributeFacet = ProductFacets['attributes'][number]
+
 const { data: facets } = await useProductFacets()
 
-const MATERIALS = ['Steel', 'Plastic', 'Aluminum', 'Wood']
+const { supplier, specValues, toggleSupplier, toggleSpec } =
+  useCatalogueFilters()
 
-const COLORS = [
-  { name: 'Blue', hex: '#1d4ed8' },
-  { name: 'White', hex: '#ffffff' },
-  { name: 'Orange', hex: '#f97316' },
-  { name: 'Pink', hex: '#ec4899' },
-  { name: 'Red', hex: '#dc2626' },
-  { name: 'Black', hex: '#000000' },
-  { name: 'Yellow', hex: '#facc15' },
-  { name: 'Grey', hex: '#9ca3af' },
-  { name: 'Brown', hex: '#7c3f00' },
-  { name: 'Beige', hex: '#d6c3a1' },
-  { name: 'Green', hex: '#16a34a' },
-  { name: 'Purple', hex: '#7e22ce' },
-]
+const COLOR_SLUGS = ['colour', 'color']
 
-const BRANDS = ['Woodhabitat', 'Izihirwe', 'Flos', 'Astro']
+const COLOR_HEXES: Record<string, string> = {
+  Blue: '#1d4ed8',
+  White: '#ffffff',
+  Orange: '#f97316',
+  Pink: '#ec4899',
+  Red: '#dc2626',
+  Black: '#000000',
+  Yellow: '#facc15',
+  Grey: '#9ca3af',
+  Brown: '#7c3f00',
+  Beige: '#d6c3a1',
+  Green: '#16a34a',
+  Purple: '#7e22ce',
+}
 
-const SPACES = [
-  'Living room',
-  'Bedroom',
-  'Office',
-  'Dining',
-  'Bathroom',
-  'Outdoor',
-]
+const sectionTitle = (attribute: AttributeFacet): string =>
+  attribute.unit ? `${attribute.name} (${attribute.unit})` : attribute.name
 </script>
 
 <template>
@@ -49,37 +48,41 @@ const SPACES = [
       <label><input type="checkbox" /> By request</label>
     </fieldset>
 
-    <fieldset class="section">
-      <legend>Materials</legend>
-      <div class="grid-2">
-        <label v-for="material in MATERIALS" :key="material">
-          <input type="checkbox" /> {{ material }}
-        </label>
-      </div>
-    </fieldset>
-
-    <fieldset class="section">
-      <legend>Color</legend>
-      <div class="grid-2">
-        <label v-for="color in COLORS" :key="color.name">
-          <span class="swatch" :style="{ background: color.hex }" />
-          {{ color.name }}
-        </label>
-      </div>
-    </fieldset>
-
-    <fieldset class="section">
+    <fieldset v-if="facets && facets.suppliers.length > 0" class="section">
       <legend>Brand</legend>
       <ul class="brands">
-        <li v-for="brand in BRANDS" :key="brand">{{ brand }}</li>
+        <li v-for="brand in facets.suppliers" :key="brand.slug">
+          <button
+            type="button"
+            class="brand"
+            :class="{ active: supplier === brand.slug }"
+            @click="toggleSupplier(brand.slug)"
+          >
+            {{ brand.name }} ({{ brand.count }})
+          </button>
+        </li>
       </ul>
     </fieldset>
 
-    <fieldset class="section">
-      <legend>Space</legend>
+    <fieldset
+      v-for="attribute in facets?.attributes"
+      :key="attribute.slug"
+      class="section"
+    >
+      <legend>{{ sectionTitle(attribute) }}</legend>
       <div class="grid-2">
-        <label v-for="space in SPACES" :key="space">
-          <input type="checkbox" /> {{ space }}
+        <label v-for="value in attribute.values" :key="value.value">
+          <input
+            type="checkbox"
+            :checked="specValues(attribute.slug).includes(value.value)"
+            @change="toggleSpec(attribute.slug, value.value)"
+          />
+          <span
+            v-if="COLOR_SLUGS.includes(attribute.slug)"
+            class="swatch"
+            :style="{ background: COLOR_HEXES[value.value] }"
+          />
+          {{ value.value }} ({{ value.count }})
         </label>
       </div>
     </fieldset>
@@ -153,6 +156,22 @@ const SPACES = [
   display: flex;
   flex-wrap: wrap;
   gap: 1rem;
+}
+
+.brand {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
   color: #666;
+  cursor: pointer;
+}
+
+.brand.active {
+  color: #000;
+  font-weight: 600;
+  text-decoration: underline;
 }
 </style>

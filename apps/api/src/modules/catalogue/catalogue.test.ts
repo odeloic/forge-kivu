@@ -1170,6 +1170,63 @@ describe('product facets', () => {
     expect(body.price).toEqual({ min: 30, max: 50 })
   })
 
+  it('combines repeated values of one attribute with OR on the list', async () => {
+    const admin = await loginAs(ADMIN)
+    await scopedSeed(admin)
+
+    const both = (await (
+      await browse('?spec.material=Wood&spec.material=Steel')
+    ).json()) as Page
+    const crossed = (await (
+      await browse('?spec.material=Wood&spec.material=Steel&spec.width=120')
+    ).json()) as Page
+
+    expect(both.items.map((row) => row.slug).sort()).toEqual([
+      'steel-tile',
+      'stone-slab',
+      'wood-tile',
+    ])
+    expect(crossed.items).toMatchObject([{ slug: 'wood-tile' }])
+  })
+
+  it('scopes facets to the union of repeated values of one attribute', async () => {
+    const admin = await loginAs(ADMIN)
+    await scopedSeed(admin)
+
+    const res = await facets('?spec.material=Wood&spec.material=Steel')
+    const body = (await res.json()) as {
+      price: { min: number; max: number } | null
+      suppliers: { slug: string; name: string; count: number }[]
+      attributes: {
+        slug: string
+        values: { value: string; count: number }[]
+      }[]
+    }
+
+    expect(body.attributes).toEqual([
+      {
+        slug: 'material',
+        name: 'Material',
+        unit: null,
+        values: [
+          { value: 'Wood', count: 2 },
+          { value: 'Steel', count: 1 },
+        ],
+      },
+      {
+        slug: 'width',
+        name: 'Width',
+        unit: 'cm',
+        values: [{ value: '120', count: 1 }],
+      },
+    ])
+    expect(body.suppliers).toEqual([
+      { slug: 'kivu-tiles', name: 'Kivu Tiles', count: 2 },
+      { slug: 'lake-stone', name: 'Lake Stone', count: 1 },
+    ])
+    expect(body.price).toEqual({ min: 10, max: 50 })
+  })
+
   it('keeps all suppliers listed when filtering by supplier', async () => {
     const admin = await loginAs(ADMIN)
     await scopedSeed(admin)

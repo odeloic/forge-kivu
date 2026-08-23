@@ -838,7 +838,7 @@ const publicConditions = (
             and(
               eq(productSpecs.productId, products.id),
               eq(productSpecs.attributeId, attributeId),
-              eq(productSpecs.value, filter.value),
+              inArray(productSpecs.value, filter.values),
             ),
           ),
       ),

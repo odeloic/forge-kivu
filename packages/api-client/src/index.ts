@@ -22,3 +22,8 @@ export type ProductPage = InferResponseType<
 >
 
 export type ProductListItem = ProductPage['items'][number]
+
+export type ProductFacets = InferResponseType<
+  ApiClient['catalogue']['products']['facets']['$get'],
+  200
+>

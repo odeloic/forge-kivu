@@ -129,11 +129,18 @@ export const publicListQuerySchema = z
     category,
     supplier,
     page,
-    specs: Object.entries(rest).flatMap(([key, value]) =>
-      key.startsWith(SPEC_QUERY_PREFIX) && typeof value === 'string'
-        ? [{ slug: key.slice(SPEC_QUERY_PREFIX.length), value }]
-        : [],
-    ),
+    specs: Object.entries(rest).flatMap(([key, value]) => {
+      if (!key.startsWith(SPEC_QUERY_PREFIX)) return []
+      const values = [
+        ...new Set(
+          (Array.isArray(value) ? value : [value]).filter(
+            (item): item is string => typeof item === 'string',
+          ),
+        ),
+      ]
+      if (values.length === 0) return []
+      return [{ slug: key.slice(SPEC_QUERY_PREFIX.length), values }]
+    }),
   }))
 
 export type CreateProductInput = z.infer<typeof createProductSchema>

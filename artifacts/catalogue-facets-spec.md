@@ -12,7 +12,7 @@ Feeds the public product filter sidebar (`ProductFilters.vue`). Companion to the
 6. **Counts use the exclude-own-dimension rule.** Each dimension's counts are computed with every active filter applied *except its own*. This keeps sibling values visible and correctly counted once a value is selected (checking "Wood" must not zero out "Steel"). Values with zero matches are omitted.
 7. **Price bounds come from `product_variants.price`** — min and max across matching products (scoped like everything else, excluding any future price filter's own value). Null when no matching variant has a price. The hardcoded 5,000–500,000 in the sidebar dies.
 8. **Availability stays out.** Nothing in the schema models stock; the section remains decorative until an availability model exists.
-9. **Single value per attribute for now.** The existing `spec.<slug>=<value>` contract is one value per attribute; multi-select within a section (OR semantics, repeated params) is deferred and purely additive.
+9. ~~**Single value per attribute for now.** The existing `spec.<slug>=<value>` contract is one value per attribute; multi-select within a section (OR semantics, repeated params) is deferred and purely additive.~~ **Multi-select within a section.** `spec.<slug>` accepts repeated params; values within an attribute combine with OR, attributes still combine with AND. Pulled forward once the sidebar became interactive: checkboxes that replace the previous selection instead of combining with it read as broken.
 
 ## Response shape
 

@@ -1,27 +1,64 @@
-import type { LocationQueryValue } from 'vue-router'
+import type { LocationQuery, LocationQueryValue } from 'vue-router'
 
 const FIXED_KEYS = ['category', 'supplier', 'page'] as const
 
-const single = (
+const strings = (
   value: LocationQueryValue | LocationQueryValue[],
-): string | undefined => {
-  const first = Array.isArray(value) ? value[0] : value
-  return typeof first === 'string' && first.length > 0 ? first : undefined
+): string[] => {
+  const items = Array.isArray(value) ? value : [value]
+  return items.filter(
+    (item): item is string => typeof item === 'string' && item.length > 0,
+  )
 }
 
 export const useCatalogueFilters = () => {
   const route = useRoute()
 
-  const query = computed<Record<string, string>>(() => {
-    const entries: Record<string, string> = {}
+  const query = computed<Record<string, string | string[]>>(() => {
+    const entries: Record<string, string | string[]> = {}
     for (const [key, value] of Object.entries(route.query)) {
-      const fixed = (FIXED_KEYS as readonly string[]).includes(key)
-      if (!fixed && !key.startsWith('spec.')) continue
-      const first = single(value)
-      if (first) entries[key] = first
+      const values = strings(value)
+      if (values.length === 0) continue
+      if ((FIXED_KEYS as readonly string[]).includes(key)) {
+        entries[key] = values[0] as string
+      } else if (key.startsWith('spec.')) {
+        entries[key] = values
+      }
     }
     return entries
   })
 
-  return { query }
+  const apply = (updates: Record<string, string | string[] | null>) => {
+    const next: LocationQuery = { ...route.query }
+    delete next.page
+    for (const [key, value] of Object.entries(updates)) {
+      if (value === null) delete next[key]
+      else next[key] = value
+    }
+    return navigateTo({ query: next })
+  }
+
+  const supplier = computed(() => {
+    const value = query.value.supplier
+    return typeof value === 'string' ? value : undefined
+  })
+
+  const specValues = (slug: string): string[] => {
+    const value = query.value[`spec.${slug}`]
+    if (typeof value === 'string') return [value]
+    return value ?? []
+  }
+
+  const toggleSupplier = (slug: string) =>
+    apply({ supplier: supplier.value === slug ? null : slug })
+
+  const toggleSpec = (slug: string, value: string) => {
+    const current = specValues(slug)
+    const values = current.includes(value)
+      ? current.filter((item) => item !== value)
+      : [...current, value]
+    return apply({ [`spec.${slug}`]: values.length > 0 ? values : null })
+  }
+
+  return { query, supplier, specValues, toggleSupplier, toggleSpec }
 }
