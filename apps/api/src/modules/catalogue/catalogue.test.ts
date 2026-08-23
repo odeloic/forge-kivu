@@ -1006,7 +1006,8 @@ describe('publish and browse publicly', () => {
 })
 
 describe('product facets', () => {
-  const facets = () => app.request('/catalogue/products/facets')
+  const facets = (query = '') =>
+    app.request(`/catalogue/products/facets${query}`)
 
   const publishedWithSpecs = async (
     cookie: string,
@@ -1101,6 +1102,203 @@ describe('product facets', () => {
       { slug: 'lake-stone', name: 'Lake Stone', count: 1 },
     ])
     expect(body.price).toEqual({ min: 9.5, max: 30 })
+  })
+
+  const scopedSeed = async (admin: string): Promise<Seed> => {
+    const data = await seed(admin)
+    await showSupplier(data.supplierId)
+    await showSupplier(data.otherSupplierId)
+
+    const wood = await publishedWithSpecs(admin, data, 'wood-tile', [
+      { attributeId: data.material, value: 'Wood' },
+      { attributeId: data.width, value: '120' },
+    ])
+    await putVariants(wood, admin, { variants: [{ price: 30 }] })
+
+    const steel = await publishedWithSpecs(admin, data, 'steel-tile', [
+      { attributeId: data.material, value: 'Steel' },
+    ])
+    await putVariants(steel, admin, { variants: [{ price: 10 }] })
+
+    const stone = await publishedWithSpecs(
+      admin,
+      data,
+      'stone-slab',
+      [{ attributeId: data.material, value: 'Wood' }],
+      { supplierId: data.otherSupplierId, categoryId: data.tiles },
+    )
+    await putVariants(stone, admin, { variants: [{ price: 50 }] })
+
+    return data
+  }
+
+  it('keeps sibling values visible when filtering by a spec', async () => {
+    const admin = await loginAs(ADMIN)
+    await scopedSeed(admin)
+
+    const res = await facets('?spec.material=Wood')
+    const body = (await res.json()) as {
+      price: { min: number; max: number } | null
+      suppliers: { slug: string; count: number }[]
+      attributes: {
+        slug: string
+        values: { value: string; count: number }[]
+      }[]
+    }
+
+    expect(body.attributes).toEqual([
+      {
+        slug: 'material',
+        name: 'Material',
+        unit: null,
+        values: [
+          { value: 'Wood', count: 2 },
+          { value: 'Steel', count: 1 },
+        ],
+      },
+      {
+        slug: 'width',
+        name: 'Width',
+        unit: 'cm',
+        values: [{ value: '120', count: 1 }],
+      },
+    ])
+    expect(body.suppliers).toEqual([
+      { slug: 'kivu-tiles', name: 'Kivu Tiles', count: 1 },
+      { slug: 'lake-stone', name: 'Lake Stone', count: 1 },
+    ])
+    expect(body.price).toEqual({ min: 30, max: 50 })
+  })
+
+  it('keeps all suppliers listed when filtering by supplier', async () => {
+    const admin = await loginAs(ADMIN)
+    await scopedSeed(admin)
+
+    const res = await facets('?supplier=kivu-tiles')
+    const body = (await res.json()) as {
+      price: { min: number; max: number } | null
+      suppliers: { slug: string; count: number }[]
+      attributes: {
+        slug: string
+        values: { value: string; count: number }[]
+      }[]
+    }
+
+    expect(body.suppliers).toEqual([
+      { slug: 'kivu-tiles', name: 'Kivu Tiles', count: 2 },
+      { slug: 'lake-stone', name: 'Lake Stone', count: 1 },
+    ])
+    expect(body.attributes).toEqual([
+      {
+        slug: 'material',
+        name: 'Material',
+        unit: null,
+        values: [
+          { value: 'Steel', count: 1 },
+          { value: 'Wood', count: 1 },
+        ],
+      },
+      {
+        slug: 'width',
+        name: 'Width',
+        unit: 'cm',
+        values: [{ value: '120', count: 1 }],
+      },
+    ])
+    expect(body.price).toEqual({ min: 10, max: 30 })
+  })
+
+  it('scopes facets to the category subtree', async () => {
+    const admin = await loginAs(ADMIN)
+    await scopedSeed(admin)
+
+    const subtree = await facets('?category=tiles')
+    const leaf = await facets('?category=floor-tiles')
+
+    const subtreeBody = (await subtree.json()) as {
+      suppliers: { slug: string; count: number }[]
+    }
+    const leafBody = (await leaf.json()) as {
+      suppliers: { slug: string; name: string; count: number }[]
+      attributes: { slug: string; values: { value: string }[] }[]
+    }
+
+    expect(subtreeBody.suppliers).toEqual([
+      { slug: 'kivu-tiles', name: 'Kivu Tiles', count: 2 },
+      { slug: 'lake-stone', name: 'Lake Stone', count: 1 },
+    ])
+    expect(leafBody.suppliers).toEqual([
+      { slug: 'kivu-tiles', name: 'Kivu Tiles', count: 2 },
+    ])
+    expect(leafBody.attributes).toEqual([
+      {
+        slug: 'material',
+        name: 'Material',
+        unit: null,
+        values: [
+          { value: 'Steel', count: 1 },
+          { value: 'Wood', count: 1 },
+        ],
+      },
+      {
+        slug: 'width',
+        name: 'Width',
+        unit: 'cm',
+        values: [{ value: '120', count: 1 }],
+      },
+    ])
+  })
+
+  it('combines supplier and spec filters with each dimension excluding its own', async () => {
+    const admin = await loginAs(ADMIN)
+    await scopedSeed(admin)
+
+    const res = await facets('?supplier=kivu-tiles&spec.material=Wood')
+    const body = (await res.json()) as {
+      price: { min: number; max: number } | null
+      suppliers: { slug: string; count: number }[]
+      attributes: {
+        slug: string
+        values: { value: string; count: number }[]
+      }[]
+    }
+
+    expect(body.suppliers).toEqual([
+      { slug: 'kivu-tiles', name: 'Kivu Tiles', count: 1 },
+      { slug: 'lake-stone', name: 'Lake Stone', count: 1 },
+    ])
+    expect(body.attributes).toEqual([
+      {
+        slug: 'material',
+        name: 'Material',
+        unit: null,
+        values: [
+          { value: 'Steel', count: 1 },
+          { value: 'Wood', count: 1 },
+        ],
+      },
+      {
+        slug: 'width',
+        name: 'Width',
+        unit: 'cm',
+        values: [{ value: '120', count: 1 }],
+      },
+    ])
+    expect(body.price).toEqual({ min: 30, max: 30 })
+  })
+
+  it('returns empty facets for an unknown filter value', async () => {
+    const admin = await loginAs(ADMIN)
+    await scopedSeed(admin)
+
+    const res = await facets('?category=no-such-category')
+
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({
+      price: null,
+      suppliers: [],
+      attributes: [],
+    })
   })
 
   it('orders values by count descending then alphabetically', async () => {

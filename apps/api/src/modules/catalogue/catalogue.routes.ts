@@ -35,7 +35,11 @@ export const catalogueRoutes = new Hono()
   .get('/products', zValidator('query', publicListQuerySchema), async (c) =>
     c.json(await listPublished(c.req.valid('query'))),
   )
-  .get('/products/facets', async (c) => c.json(await getFacets()))
+  .get(
+    '/products/facets',
+    zValidator('query', publicListQuerySchema),
+    async (c) => c.json(await getFacets(c.req.valid('query'))),
+  )
   .get(
     '/products/:supplierSlug/:productSlug',
     zValidator('param', publicProductParamSchema),

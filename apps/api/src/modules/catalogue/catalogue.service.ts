@@ -8,6 +8,7 @@ import {
   inArray,
   max,
   min,
+  type SQL,
   sql,
 } from 'drizzle-orm'
 
@@ -790,6 +791,63 @@ const emptyPage = (page: number): ProductPage => ({
   total: 0,
 })
 
+type PublicScope = {
+  supplierById: Map<string, ProductRef>
+  tree: CategoryNode[]
+  attributeIdBySlug: Map<string, string>
+}
+
+type DimensionOmit = { supplier?: boolean; specSlug?: string }
+
+const publicConditions = (
+  scope: PublicScope,
+  query: PublicListQuery,
+  omit: DimensionOmit = {},
+): SQL[] | null => {
+  const conditions: SQL[] = [eq(products.status, PRODUCT_STATUSES.PUBLISHED)]
+
+  if (query.supplier && !omit.supplier) {
+    const match = [...scope.supplierById.values()].find(
+      (supplier) => supplier.slug === query.supplier,
+    )
+    if (!match) return null
+    conditions.push(eq(products.supplierId, match.id))
+  } else {
+    if (scope.supplierById.size === 0) return null
+    conditions.push(
+      inArray(products.supplierId, [...scope.supplierById.keys()]),
+    )
+  }
+
+  if (query.category) {
+    const ids = subtreeIds(scope.tree, query.category)
+    if (!ids) return null
+    conditions.push(inArray(products.categoryId, ids))
+  }
+
+  for (const filter of query.specs) {
+    if (filter.slug === omit.specSlug) continue
+    const attributeId = scope.attributeIdBySlug.get(filter.slug)
+    if (!attributeId) return null
+    conditions.push(
+      exists(
+        db
+          .select({ matched: sql`1` })
+          .from(productSpecs)
+          .where(
+            and(
+              eq(productSpecs.productId, products.id),
+              eq(productSpecs.attributeId, attributeId),
+              eq(productSpecs.value, filter.value),
+            ),
+          ),
+      ),
+    )
+  }
+
+  return conditions
+}
+
 export const listPublished = async (
   query: PublicListQuery,
 ): Promise<ProductPage> => {
@@ -801,52 +859,16 @@ export const listPublished = async (
   ])
   const categoryById = collectCategories(tree, new Map())
 
-  let supplierIds = [...supplierById.keys()]
-  if (query.supplier) {
-    const match = [...supplierById.values()].find(
-      (supplier) => supplier.slug === query.supplier,
-    )
-    if (!match) return emptyPage(page)
-    supplierIds = [match.id]
-  }
-  if (supplierIds.length === 0) return emptyPage(page)
+  const attributeIdBySlug =
+    query.specs.length > 0
+      ? new Map((await listAttributes()).map((row) => [row.slug, row.id]))
+      : new Map<string, string>()
 
-  const conditions = [
-    eq(products.status, PRODUCT_STATUSES.PUBLISHED),
-    inArray(products.supplierId, supplierIds),
-  ]
-
-  if (query.category) {
-    const ids = subtreeIds(tree, query.category)
-    if (!ids) return emptyPage(page)
-    conditions.push(inArray(products.categoryId, ids))
-  }
-
-  if (query.specs.length > 0) {
-    const attributeIdBySlug = new Map(
-      (await listAttributes()).map((row) => [row.slug, row.id]),
-    )
-
-    for (const filter of query.specs) {
-      const attributeId = attributeIdBySlug.get(filter.slug)
-      if (!attributeId) return emptyPage(page)
-
-      conditions.push(
-        exists(
-          db
-            .select({ matched: sql`1` })
-            .from(productSpecs)
-            .where(
-              and(
-                eq(productSpecs.productId, products.id),
-                eq(productSpecs.attributeId, attributeId),
-                eq(productSpecs.value, filter.value),
-              ),
-            ),
-        ),
-      )
-    }
-  }
+  const conditions = publicConditions(
+    { supplierById, tree, attributeIdBySlug },
+    query,
+  )
+  if (!conditions) return emptyPage(page)
 
   const where = and(...conditions)
 
@@ -917,47 +939,72 @@ export type ProductFacets = {
   attributes: AttributeFacet[]
 }
 
-export const getFacets = async (): Promise<ProductFacets> => {
-  const supplierById = await supplierRefs(true)
-  const supplierIds = [...supplierById.keys()]
-  if (supplierIds.length === 0) {
-    return { price: null, suppliers: [], attributes: [] }
-  }
+const specFacetRows = (conditions: SQL[]) =>
+  db
+    .select({
+      attributeId: productSpecs.attributeId,
+      value: productSpecs.value,
+      count: count(),
+    })
+    .from(productSpecs)
+    .innerJoin(products, eq(products.id, productSpecs.productId))
+    .where(and(...conditions))
+    .groupBy(productSpecs.attributeId, productSpecs.value)
 
-  const matching = and(
-    eq(products.status, PRODUCT_STATUSES.PUBLISHED),
-    inArray(products.supplierId, supplierIds),
-  )
-
-  const [specRows, supplierRows, priceRows, attributeById] = await Promise.all([
-    db
-      .select({
-        attributeId: productSpecs.attributeId,
-        value: productSpecs.value,
-        count: count(),
-      })
-      .from(productSpecs)
-      .innerJoin(products, eq(products.id, productSpecs.productId))
-      .where(matching)
-      .groupBy(productSpecs.attributeId, productSpecs.value),
-    db
-      .select({ supplierId: products.supplierId, count: count() })
-      .from(products)
-      .where(matching)
-      .groupBy(products.supplierId),
-    db
-      .select({
-        min: min(productVariants.price),
-        max: max(productVariants.price),
-      })
-      .from(productVariants)
-      .innerJoin(products, eq(products.id, productVariants.productId))
-      .where(matching),
-    listAttributes().then(
-      (attributes) =>
-        new Map(attributes.map((attribute) => [attribute.id, attribute])),
-    ),
+export const getFacets = async (
+  query: PublicListQuery,
+): Promise<ProductFacets> => {
+  const [supplierById, tree, attributeRows] = await Promise.all([
+    supplierRefs(true),
+    getTree(),
+    listAttributes(),
   ])
+  const scope: PublicScope = {
+    supplierById,
+    tree,
+    attributeIdBySlug: new Map(attributeRows.map((row) => [row.slug, row.id])),
+  }
+  const attributeById = new Map(attributeRows.map((row) => [row.id, row]))
+  const filteredSlugs = new Set(query.specs.map((filter) => filter.slug))
+
+  const allConditions = publicConditions(scope, query)
+  const supplierConditions = publicConditions(scope, query, { supplier: true })
+
+  const [sharedSpecRows, ownSpecRows, supplierRows, priceRows] =
+    await Promise.all([
+      allConditions ? specFacetRows(allConditions) : [],
+      Promise.all(
+        query.specs.map((filter) => {
+          const attributeId = scope.attributeIdBySlug.get(filter.slug)
+          if (!attributeId) return []
+          const conditions = publicConditions(scope, query, {
+            specSlug: filter.slug,
+          })
+          if (!conditions) return []
+          return specFacetRows([
+            ...conditions,
+            eq(productSpecs.attributeId, attributeId),
+          ])
+        }),
+      ).then((groups) => groups.flat()),
+      supplierConditions
+        ? db
+            .select({ supplierId: products.supplierId, count: count() })
+            .from(products)
+            .where(and(...supplierConditions))
+            .groupBy(products.supplierId)
+        : [],
+      allConditions
+        ? db
+            .select({
+              min: min(productVariants.price),
+              max: max(productVariants.price),
+            })
+            .from(productVariants)
+            .innerJoin(products, eq(products.id, productVariants.productId))
+            .where(and(...allConditions))
+        : [],
+    ])
 
   const bounds = priceRows[0]
   const price =
@@ -972,6 +1019,14 @@ export const getFacets = async (): Promise<ProductFacets> => {
       return [{ slug: supplier.slug, name: supplier.name, count: row.count }]
     })
     .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+
+  const specRows = [
+    ...sharedSpecRows.filter((row) => {
+      const attribute = attributeById.get(row.attributeId)
+      return attribute ? !filteredSlugs.has(attribute.slug) : false
+    }),
+    ...ownSpecRows,
+  ]
 
   const bySlug = new Map<string, AttributeFacet>()
   for (const row of specRows) {
