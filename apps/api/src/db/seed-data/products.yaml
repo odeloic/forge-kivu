@@ -1,0 +1,660 @@
+- supplier: kigali-build-supply
+  category: cement
+  name: General Purpose Cement 50 kg
+  slug: general-purpose-cement-50kg
+  description: General-purpose cement suitable for masonry, plastering, screeding, and reinforced concrete work.
+  status: published
+  media:
+    - product-images/general-purpose-cement-50kg.png
+  specs:
+    material: Portland limestone cement
+    application: Masonry, plastering, screeding, and concrete
+    net-weight: '50'
+    strength-class: 32.5N
+    initial-setting-time: '75'
+  variants:
+    - sku: KBS-CEM-GP50
+      price: 14500
+
+- supplier: kigali-build-supply
+  category: concrete-blocks
+  name: Load-Bearing Concrete Block
+  slug: load-bearing-concrete-block
+  description: Machine-moulded concrete block for structural and partition walls in residential and commercial construction.
+  status: published
+  media:
+    - product-images/load-bearing-concrete-block.png
+  specs:
+    material: Cement and crushed aggregate
+    application: Load-bearing and partition walls
+    length: '0.4'
+    height: '200'
+    compressive-strength: '7'
+  options:
+    - name: Width
+      values: [150 mm, 200 mm]
+  variants:
+    - sku: KBS-BLK-150
+      price: 900
+      options:
+        Width: 150 mm
+    - sku: KBS-BLK-200
+      price: 1200
+      options:
+        Width: 200 mm
+
+- supplier: kigali-build-supply
+  category: steel-bars
+  name: High-Tensile Reinforcement Bar
+  slug: high-tensile-reinforcement-bar
+  description: Ribbed high-tensile steel reinforcement bar for concrete foundations, columns, beams, and slabs.
+  status: published
+  media:
+    - product-images/high-tensile-reinforcement-bar.png
+  specs:
+    material: Carbon steel
+    application: Reinforced concrete
+    steel-grade: B500B
+    length: '12'
+    finish: Ribbed
+  options:
+    - name: Diameter
+      values: [8 mm, 10 mm, 12 mm, 16 mm]
+  variants:
+    - sku: KBS-RBR-B500-08
+      price: 6800
+      options:
+        Diameter: 8 mm
+    - sku: KBS-RBR-B500-10
+      price: 10100
+      options:
+        Diameter: 10 mm
+    - sku: KBS-RBR-B500-12
+      price: 14200
+      options:
+        Diameter: 12 mm
+    - sku: KBS-RBR-B500-16
+      price: 25200
+      options:
+        Diameter: 16 mm
+
+- supplier: kigali-build-supply
+  category: metal-sheets
+  name: Corrugated Roofing Sheet
+  slug: corrugated-roofing-sheet
+  description: Lightweight corrugated steel roofing sheet for homes, workshops, storage buildings, and site structures.
+  status: published
+  media:
+    - product-images/corrugated-roofing-sheet.png
+  specs:
+    material: Galvanized steel
+    application: Roofing and wall cladding
+    thickness: '0.3'
+    effective-width: '762'
+    profile: Corrugated
+  options:
+    - name: Length
+      values: [2.5 m, 3 m]
+    - name: Colour
+      values: [Galvanized, Forest Green]
+  variants:
+    - sku: KBS-RFS-25-GAL
+      price: 15000
+      options:
+        Length: 2.5 m
+        Colour: Galvanized
+    - sku: KBS-RFS-25-GRN
+      price: 16800
+      options:
+        Length: 2.5 m
+        Colour: Forest Green
+    - sku: KBS-RFS-30-GAL
+      price: 17900
+      options:
+        Length: 3 m
+        Colour: Galvanized
+    - sku: KBS-RFS-30-GRN
+      price: 20100
+      options:
+        Length: 3 m
+        Colour: Forest Green
+
+- supplier: kigali-build-supply
+  category: water-pipes
+  name: PVC Pressure Pipe
+  slug: pvc-pressure-pipe
+  description: Rigid pressure-rated uPVC pipe for cold-water distribution in residential and commercial buildings.
+  status: published
+  media:
+    - product-images/pvc-pressure-pipe.png
+  specs:
+    material: uPVC
+    application: Cold-water distribution
+    pressure-rating: '10'
+    length: '6'
+    finish: Grey
+  options:
+    - name: Diameter
+      values: [20 mm, 25 mm, 32 mm]
+  variants:
+    - sku: KBS-PVC-P10-20
+      price: 6500
+      options:
+        Diameter: 20 mm
+    - sku: KBS-PVC-P10-25
+      price: 8900
+      options:
+        Diameter: 25 mm
+    - sku: KBS-PVC-P10-32
+      price: 12500
+      options:
+        Diameter: 32 mm
+
+- supplier: kigali-build-supply
+  category: electrical-cables
+  name: Twin and Earth Electrical Cable
+  slug: twin-earth-electrical-cable
+  description: Copper cable for fixed indoor electrical installations, supplied in a 100-metre roll.
+  status: published
+  media:
+    - product-images/twin-earth-electrical-cable.png
+  specs:
+    application: Fixed indoor wiring
+    conductor-material: Copper
+    conductor-configuration: Twin and earth
+    rated-voltage: 450/750
+    roll-length: '100'
+    insulation-material: PVC
+  options:
+    - name: Conductor Size
+      values: [1.5 mm², 2.5 mm², 4 mm²]
+  variants:
+    - sku: KBS-CBL-TE15-100
+      price: 68000
+      options:
+        Conductor Size: 1.5 mm²
+    - sku: KBS-CBL-TE25-100
+      price: 108000
+      options:
+        Conductor Size: 2.5 mm²
+    - sku: KBS-CBL-TE40-100
+      price: 172000
+      options:
+        Conductor Size: 4 mm²
+
+- supplier: kigali-build-supply
+  category: drills
+  name: Professional Impact Drill 850 W
+  slug: professional-impact-drill-850w
+  description: Variable-speed impact drill for masonry, steel, and timber work on construction and installation projects.
+  status: published
+  media:
+    - product-images/professional-impact-drill-850w.png
+  specs:
+    application: Masonry, steel, and timber drilling
+    rated-power: '850'
+    rated-voltage: 220–240
+    chuck-capacity: '13'
+    no-load-speed: 0–3000
+    warranty: '12'
+  variants:
+    - sku: KBS-DRL-IMP850
+      price: 82500
+
+- supplier: kigali-build-supply
+  category: locks-handles
+  name: Secure Mortise Door Lock Set
+  slug: secure-mortise-door-lock-set
+  description: Complete mortise lock and lever-handle set for timber interior and exterior doors.
+  status: published
+  media:
+    - product-images/secure-mortise-door-lock-set.png
+  specs:
+    application: Timber doors
+    material: Stainless steel and zinc alloy
+    lock-type: Mortise sash lock
+    backset: '60'
+    keys-included: '3'
+    compatible-door-thickness: 35–50
+    warranty: '12'
+  options:
+    - name: Finish
+      values: [Satin Silver, Matte Black]
+  variants:
+    - sku: KBS-LCK-M60-SLV
+      price: 28500
+      options:
+        Finish: Satin Silver
+    - sku: KBS-LCK-M60-BLK
+      price: 31500
+      options:
+        Finish: Matte Black
+
+- supplier: kigali-build-supply
+  category: interior-paint
+  name: Washable Interior Wall Paint
+  slug: washable-interior-wall-paint
+  description: Low-odour water-based paint with a washable matt finish for interior walls and ceilings.
+  status: published
+  media:
+    - product-images/washable-interior-wall-paint.png
+  specs:
+    application: Interior walls and ceilings
+    base-type: Water-based
+    finish: Matt
+    coverage: 10–12
+    drying-time: '2'
+    recommended-coats: '2'
+  options:
+    - name: Container Size
+      values: [5 L, 20 L]
+    - name: Colour
+      values: [Brilliant White, Soft Cream]
+  variants:
+    - sku: KBS-PNT-WHT-05
+      price: 32000
+      options:
+        Container Size: 5 L
+        Colour: Brilliant White
+    - sku: KBS-PNT-CRM-05
+      price: 33500
+      options:
+        Container Size: 5 L
+        Colour: Soft Cream
+    - sku: KBS-PNT-WHT-20
+      price: 109000
+      options:
+        Container Size: 20 L
+        Colour: Brilliant White
+    - sku: KBS-PNT-CRM-20
+      price: 113000
+      options:
+        Container Size: 20 L
+        Colour: Soft Cream
+
+- supplier: kigali-build-supply
+  category: tile-adhesives
+  name: Standard Tile Adhesive 20 kg
+  slug: standard-tile-adhesive-20kg
+  description: Cement-based adhesive for fixing ceramic and porcelain tiles to prepared floors and walls.
+  status: published
+  media:
+    - product-images/standard-tile-adhesive-20kg.png
+  specs:
+    application: Ceramic and porcelain tiles
+    base-type: Cement-based
+    net-weight: '20'
+    coverage-per-bag: 4–5
+    working-time: '4'
+    indoor-outdoor-use: Indoor and sheltered outdoor
+  variants:
+    - sku: KBS-ADH-STD20
+      price: 13500
+
+- supplier: kivu-home-interiors
+  category: sofas-chairs
+  name: Imizi Three-Seater Sofa
+  slug: imizi-three-seater-sofa
+  description: Deep three-seater sofa with supportive cushions and a durable woven cover for contemporary living rooms.
+  status: published
+  media:
+    - product-images/imizi-three-seater-sofa.png
+  specs:
+    application: Living room seating
+    frame-material: Kiln-dried hardwood
+    upholstery-material: Woven polyester
+    seating-capacity: '3'
+    width: '2100'
+    height: '850'
+    depth: '900'
+    warranty: '12'
+  options:
+    - name: Colour
+      values: [Charcoal, Sand Beige, Forest Green]
+  variants:
+    - sku: KHI-SOF-IMZ-CHR
+      price: 875000
+      options:
+        Colour: Charcoal
+    - sku: KHI-SOF-IMZ-BGE
+      price: 875000
+      options:
+        Colour: Sand Beige
+    - sku: KHI-SOF-IMZ-GRN
+      price: 895000
+      options:
+        Colour: Forest Green
+
+- supplier: kivu-home-interiors
+  category: beds
+  name: Amahoro Queen Bed Frame
+  slug: amahoro-queen-bed-frame
+  description: Upholstered queen bed frame with a tall padded headboard and reinforced timber slat support.
+  status: published
+  media:
+    - product-images/amahoro-queen-bed-frame.png
+  specs:
+    application: Bedroom furniture
+    frame-material: Hardwood and engineered board
+    upholstery-material: Textured polyester
+    mattress-size: 1600 × 2000 mm
+    mattress-included: 'No'
+    width: '1720'
+    height: '1150'
+    depth: '2140'
+    warranty: '12'
+  options:
+    - name: Finish
+      values: [Natural Oak, Dark Walnut]
+  variants:
+    - sku: KHI-BED-AMH-OAK
+      price: 485000
+      options:
+        Finish: Natural Oak
+    - sku: KHI-BED-AMH-WNT
+      price: 505000
+      options:
+        Finish: Dark Walnut
+
+- supplier: kivu-home-interiors
+  category: dining-tables
+  name: Isaro Six-Seater Dining Table
+  slug: isaro-six-seater-dining-table
+  description: Solid timber dining table with a clean rectangular profile designed to seat six people comfortably.
+  status: published
+  media:
+    - product-images/isaro-six-seater-dining-table.png
+  specs:
+    application: Dining room furniture
+    material: Solid acacia wood
+    seating-capacity: '6'
+    chairs-included: 'No'
+    width: '1800'
+    height: '760'
+    depth: '900'
+    warranty: '12'
+  options:
+    - name: Finish
+      values: [Natural Oak, Dark Walnut]
+  variants:
+    - sku: KHI-TBL-ISR-OAK
+      price: 395000
+      options:
+        Finish: Natural Oak
+    - sku: KHI-TBL-ISR-WNT
+      price: 415000
+      options:
+        Finish: Dark Walnut
+
+- supplier: kivu-home-interiors
+  category: office-chairs
+  name: Kigali Ergonomic Office Chair
+  slug: kigali-ergonomic-office-chair
+  description: Breathable ergonomic task chair with lumbar support and adjustable seating for home and commercial offices.
+  status: published
+  media:
+    - product-images/kigali-ergonomic-office-chair.png
+  specs:
+    application: Office and study seating
+    frame-material: Nylon and powder-coated steel
+    upholstery-material: Mesh and moulded foam
+    maximum-load: '120'
+    adjustable-height: 'Yes'
+    armrest-type: Height adjustable
+    warranty: '12'
+  options:
+    - name: Colour
+      values: [Black, Grey]
+  variants:
+    - sku: KHI-CHR-KGL-BLK
+      price: 195000
+      options:
+        Colour: Black
+    - sku: KHI-CHR-KGL-GRY
+      price: 195000
+      options:
+        Colour: Grey
+
+- supplier: kivu-home-interiors
+  category: indoor-lighting
+  name: Umucyo Pendant Light
+  slug: umucyo-pendant-light
+  description: Contemporary metal pendant light for dining tables, kitchen islands, reception areas, and bedrooms.
+  status: published
+  media:
+    - product-images/umucyo-pendant-light.png
+  specs:
+    application: Indoor decorative lighting
+    material: Powder-coated steel
+    bulb-fitting: E27
+    bulb-included: 'No'
+    rated-power: '40'
+    rated-voltage: 220–240
+    width: '350'
+    cable-length: '1.2'
+  options:
+    - name: Finish
+      values: [Matte Black, Brushed Brass, Warm White]
+  variants:
+    - sku: KHI-LGT-UMU-BLK
+      price: 48500
+      options:
+        Finish: Matte Black
+    - sku: KHI-LGT-UMU-BRS
+      price: 55000
+      options:
+        Finish: Brushed Brass
+    - sku: KHI-LGT-UMU-WHT
+      price: 48500
+      options:
+        Finish: Warm White
+
+- supplier: kivu-home-interiors
+  category: basins
+  name: Ceramic Countertop Basin
+  slug: ceramic-countertop-basin
+  description: Slim rectangular countertop washbasin for modern bathrooms and guest washrooms.
+  status: published
+  media:
+    - product-images/ceramic-countertop-basin.png
+  specs:
+    application: Bathroom and washroom
+    material: Vitreous ceramic
+    shape: Rectangular
+    installation-type: Countertop
+    width: '600'
+    height: '130'
+    depth: '380'
+    tap-hole-count: '0'
+    overflow: 'No'
+  options:
+    - name: Finish
+      values: [Gloss White, Matte White]
+  variants:
+    - sku: KHI-BSN-CTR-GLS
+      price: 98000
+      options:
+        Finish: Gloss White
+    - sku: KHI-BSN-CTR-MAT
+      price: 112000
+      options:
+        Finish: Matte White
+
+- supplier: kivu-home-interiors
+  category: toilets
+  name: Close-Coupled Toilet Set
+  slug: close-coupled-toilet-set
+  description: Floor-mounted close-coupled toilet with a water-saving dual-flush cistern and matching seat.
+  status: published
+  media:
+    - product-images/close-coupled-toilet-set.png
+  specs:
+    application: Residential and commercial bathrooms
+    material: Vitreous china
+    installation-type: Floor mounted
+    flush-type: Dual flush
+    flush-volume: 3/6
+    outlet-type: S-trap
+    rough-in: '300'
+    warranty: '24'
+  options:
+    - name: Seat
+      values: [Standard, Soft Close]
+  variants:
+    - sku: KHI-WC-CC-STD
+      price: 185000
+      options:
+        Seat: Standard
+    - sku: KHI-WC-CC-SC
+      price: 215000
+      options:
+        Seat: Soft Close
+
+- supplier: kivu-home-interiors
+  category: taps-mixers
+  name: High-Arc Kitchen Mixer
+  slug: high-arc-kitchen-mixer
+  description: Single-lever kitchen mixer with a swivelling high-arc spout for double and single-bowl sinks.
+  status: published
+  media:
+    - product-images/high-arc-kitchen-mixer.png
+  specs:
+    application: Kitchen sink
+    material: Solid brass
+    installation-type: Deck mounted
+    cartridge-size: '35'
+    connection-size: 1/2 inch
+    spout-height: '320'
+    warranty: '24'
+  options:
+    - name: Finish
+      values: [Polished Chrome, Matte Black]
+  variants:
+    - sku: KHI-MIX-ARC-CHR
+      price: 72000
+      options:
+        Finish: Polished Chrome
+    - sku: KHI-MIX-ARC-BLK
+      price: 84000
+      options:
+        Finish: Matte Black
+
+- supplier: kivu-home-interiors
+  category: interior-doors
+  name: Panelled Interior Door
+  slug: panelled-interior-door
+  description: Primed solid-core interior door leaf with a clean four-panel profile, ready for final painting and hardware.
+  status: published
+  media:
+    - product-images/panelled-interior-door.png
+  specs:
+    application: Interior rooms
+    material: Engineered timber
+    door-core: Solid particle core
+    height: '2100'
+    thickness: '40'
+    finish: White primed
+    handing: Reversible
+  options:
+    - name: Width
+      values: [800 mm, 900 mm]
+  variants:
+    - sku: KHI-DOR-PNL-800
+      price: 145000
+      options:
+        Width: 800 mm
+    - sku: KHI-DOR-PNL-900
+      price: 158000
+      options:
+        Width: 900 mm
+
+- supplier: kivu-home-interiors
+  category: aluminium-windows
+  name: Aluminium Sliding Window
+  slug: aluminium-sliding-window
+  description: Two-panel aluminium sliding window with clear glazing and a removable insect screen.
+  status: published
+  media:
+    - product-images/aluminium-sliding-window.png
+  specs:
+    application: Residential and commercial exterior walls
+    frame-material: Powder-coated aluminium
+    opening-type: Two-panel sliding
+    glass-type: Clear float glass
+    glass-thickness: '5'
+    finish: Charcoal Grey
+    insect-screen-included: 'Yes'
+  options:
+    - name: Size
+      values: [1200 × 1000 mm, 1500 × 1200 mm]
+  variants:
+    - sku: KHI-WIN-SLD-1210
+      price: 245000
+      options:
+        Size: 1200 × 1000 mm
+    - sku: KHI-WIN-SLD-1512
+      price: 325000
+      options:
+        Size: 1500 × 1200 mm
+
+- supplier: kivu-home-interiors
+  category: floor-tiles
+  name: Stone-Look Porcelain Floor Tile
+  slug: stone-look-porcelain-floor-tile
+  description: Rectified porcelain floor tile with a subtle stone pattern for living rooms, kitchens, offices, and covered terraces.
+  status: published
+  media:
+    - product-images/stone-look-porcelain-floor-tile.png
+  specs:
+    application: Interior floors and covered terraces
+    material: Porcelain
+    tile-size: 600 × 600 mm
+    thickness: '9'
+    surface-finish: Matt
+    coverage-per-box: '1.44'
+    pieces-per-box: '4'
+    indoor-outdoor-use: Indoor and covered outdoor
+  options:
+    - name: Colour
+      values: [Grey Stone, Ivory Stone]
+  variants:
+    - sku: KHI-TIL-STN-GRY
+      price: 28500
+      options:
+        Colour: Grey Stone
+    - sku: KHI-TIL-STN-IVR
+      price: 29500
+      options:
+        Colour: Ivory Stone
+
+- supplier: kivu-home-interiors
+  category: outdoor-lighting
+  name: LED Outdoor Wall Light
+  slug: led-outdoor-wall-light
+  description: Weather-resistant up-and-down LED wall light for entrances, balconies, boundary walls, and covered walkways.
+  status: published
+  media:
+    - product-images/led-outdoor-wall-light.png
+  specs:
+    application: Exterior wall lighting
+    material: Powder-coated aluminium
+    light-source: Integrated LED
+    rated-power: '12'
+    rated-voltage: 220–240
+    colour-temperature: '3000'
+    ip-rating: IP65
+    width: '120'
+    height: '240'
+    warranty: '24'
+  options:
+    - name: Finish
+      values: [Matte Black, Dark Grey]
+  variants:
+    - sku: KHI-LGT-OUT-BLK
+      price: 62000
+      options:
+        Finish: Matte Black
+    - sku: KHI-LGT-OUT-GRY
+      price: 62000
+      options:
+        Finish: Dark Grey

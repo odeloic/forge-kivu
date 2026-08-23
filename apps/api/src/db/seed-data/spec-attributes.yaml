@@ -1,0 +1,246 @@
+- name: Application
+  slug: application
+
+- name: Material
+  slug: material
+
+- name: Base Type
+  slug: base-type
+
+- name: Net Weight
+  slug: net-weight
+  unit: kg
+
+- name: Strength Class
+  slug: strength-class
+
+- name: Initial Setting Time
+  slug: initial-setting-time
+  unit: min
+
+- name: Compressive Strength
+  slug: compressive-strength
+  unit: MPa
+
+- name: Steel Grade
+  slug: steel-grade
+
+- name: Length
+  slug: length
+  unit: m
+
+- name: Width
+  slug: width
+  unit: mm
+
+- name: Effective Width
+  slug: effective-width
+  unit: mm
+
+- name: Height
+  slug: height
+  unit: mm
+
+- name: Depth
+  slug: depth
+  unit: mm
+
+- name: Thickness
+  slug: thickness
+  unit: mm
+
+- name: Profile
+  slug: profile
+
+- name: Pressure Rating
+  slug: pressure-rating
+  unit: bar
+
+- name: Conductor Material
+  slug: conductor-material
+
+- name: Conductor Configuration
+  slug: conductor-configuration
+
+- name: Rated Voltage
+  slug: rated-voltage
+  unit: V
+
+- name: Roll Length
+  slug: roll-length
+  unit: m
+
+- name: Insulation Material
+  slug: insulation-material
+
+- name: Rated Power
+  slug: rated-power
+  unit: W
+
+- name: Chuck Capacity
+  slug: chuck-capacity
+  unit: mm
+
+- name: No-load Speed
+  slug: no-load-speed
+  unit: rpm
+
+- name: Warranty
+  slug: warranty
+  unit: months
+
+- name: Lock Type
+  slug: lock-type
+
+- name: Backset
+  slug: backset
+  unit: mm
+
+- name: Keys Included
+  slug: keys-included
+
+- name: Compatible Door Thickness
+  slug: compatible-door-thickness
+  unit: mm
+
+- name: Finish
+  slug: finish
+
+- name: Coverage
+  slug: coverage
+  unit: m²/L
+
+- name: Drying Time
+  slug: drying-time
+  unit: hours
+
+- name: Recommended Coats
+  slug: recommended-coats
+
+- name: Working Time
+  slug: working-time
+  unit: hours
+
+- name: Coverage per Bag
+  slug: coverage-per-bag
+  unit: m²
+
+- name: Indoor/Outdoor Use
+  slug: indoor-outdoor-use
+
+- name: Frame Material
+  slug: frame-material
+
+- name: Upholstery Material
+  slug: upholstery-material
+
+- name: Seating Capacity
+  slug: seating-capacity
+
+- name: Maximum Load
+  slug: maximum-load
+  unit: kg
+
+- name: Mattress Size
+  slug: mattress-size
+
+- name: Mattress Included
+  slug: mattress-included
+
+- name: Chairs Included
+  slug: chairs-included
+
+- name: Adjustable Height
+  slug: adjustable-height
+
+- name: Armrest Type
+  slug: armrest-type
+
+- name: Bulb Fitting
+  slug: bulb-fitting
+
+- name: Bulb Included
+  slug: bulb-included
+
+- name: Cable Length
+  slug: cable-length
+  unit: m
+
+- name: Shape
+  slug: shape
+
+- name: Tap Hole Count
+  slug: tap-hole-count
+
+- name: Overflow
+  slug: overflow
+
+- name: Installation Type
+  slug: installation-type
+
+- name: Flush Type
+  slug: flush-type
+
+- name: Flush Volume
+  slug: flush-volume
+  unit: L
+
+- name: Outlet Type
+  slug: outlet-type
+
+- name: Rough-in
+  slug: rough-in
+  unit: mm
+
+- name: Cartridge Size
+  slug: cartridge-size
+  unit: mm
+
+- name: Connection Size
+  slug: connection-size
+
+- name: Spout Height
+  slug: spout-height
+  unit: mm
+
+- name: Door Core
+  slug: door-core
+
+- name: Handing
+  slug: handing
+
+- name: Glass Type
+  slug: glass-type
+
+- name: Glass Thickness
+  slug: glass-thickness
+  unit: mm
+
+- name: Opening Type
+  slug: opening-type
+
+- name: Insect Screen Included
+  slug: insect-screen-included
+
+- name: Tile Size
+  slug: tile-size
+
+- name: Surface Finish
+  slug: surface-finish
+
+- name: Coverage per Box
+  slug: coverage-per-box
+  unit: m²
+
+- name: Pieces per Box
+  slug: pieces-per-box
+
+- name: IP Rating
+  slug: ip-rating
+
+- name: Colour Temperature
+  slug: colour-temperature
+  unit: K
+
+- name: Light Source
+  slug: light-source
