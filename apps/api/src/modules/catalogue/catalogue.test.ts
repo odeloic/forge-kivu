@@ -1054,6 +1054,8 @@ describe('product facets', () => {
 
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({
+      price: null,
+      suppliers: [{ slug: 'kivu-tiles', name: 'Kivu Tiles', count: 2 }],
       attributes: [
         {
           slug: 'material',
@@ -1069,6 +1071,36 @@ describe('product facets', () => {
         },
       ],
     })
+  })
+
+  it('lists supplier counts and price bounds over published products', async () => {
+    const admin = await loginAs(ADMIN)
+    const data = await seed(admin)
+    await showSupplier(data.supplierId)
+    await showSupplier(data.otherSupplierId)
+
+    const first = await publishedWithSpecs(admin, data, 'white-cement', [])
+    await putVariants(first, admin, { variants: [{ price: 30 }] })
+    const second = await publishedWithSpecs(admin, data, 'grey-cement', [])
+    await putVariants(second, admin, { variants: [{ price: 9.5 }] })
+    await publishedWithSpecs(admin, data, 'stone-slab', [], {
+      supplierId: data.otherSupplierId,
+    })
+
+    const draft = await createProduct(admin, data, { slug: 'blue-cement' })
+    await putVariants(draft, admin, { variants: [{ price: 999 }] })
+
+    const res = await facets()
+    const body = (await res.json()) as {
+      price: { min: number; max: number } | null
+      suppliers: { slug: string; name: string; count: number }[]
+    }
+
+    expect(body.suppliers).toEqual([
+      { slug: 'kivu-tiles', name: 'Kivu Tiles', count: 2 },
+      { slug: 'lake-stone', name: 'Lake Stone', count: 1 },
+    ])
+    expect(body.price).toEqual({ min: 9.5, max: 30 })
   })
 
   it('orders values by count descending then alphabetically', async () => {

@@ -1,4 +1,15 @@
-import { and, asc, count, desc, eq, exists, inArray, sql } from 'drizzle-orm'
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  exists,
+  inArray,
+  max,
+  min,
+  sql,
+} from 'drizzle-orm'
 
 import { db } from '../../db'
 import { isReferenceViolation, isUniqueViolation } from '../../db/errors'
@@ -889,15 +900,36 @@ export type AttributeFacet = {
   values: FacetValue[]
 }
 
+export type SupplierFacet = {
+  slug: string
+  name: string
+  count: number
+}
+
+export type PriceBounds = {
+  min: number
+  max: number
+}
+
 export type ProductFacets = {
+  price: PriceBounds | null
+  suppliers: SupplierFacet[]
   attributes: AttributeFacet[]
 }
 
 export const getFacets = async (): Promise<ProductFacets> => {
-  const supplierIds = (await listVisibleSuppliers()).map((row) => row.id)
-  if (supplierIds.length === 0) return { attributes: [] }
+  const supplierById = await supplierRefs(true)
+  const supplierIds = [...supplierById.keys()]
+  if (supplierIds.length === 0) {
+    return { price: null, suppliers: [], attributes: [] }
+  }
 
-  const [rows, attributeById] = await Promise.all([
+  const matching = and(
+    eq(products.status, PRODUCT_STATUSES.PUBLISHED),
+    inArray(products.supplierId, supplierIds),
+  )
+
+  const [specRows, supplierRows, priceRows, attributeById] = await Promise.all([
     db
       .select({
         attributeId: productSpecs.attributeId,
@@ -906,21 +938,43 @@ export const getFacets = async (): Promise<ProductFacets> => {
       })
       .from(productSpecs)
       .innerJoin(products, eq(products.id, productSpecs.productId))
-      .where(
-        and(
-          eq(products.status, PRODUCT_STATUSES.PUBLISHED),
-          inArray(products.supplierId, supplierIds),
-        ),
-      )
+      .where(matching)
       .groupBy(productSpecs.attributeId, productSpecs.value),
+    db
+      .select({ supplierId: products.supplierId, count: count() })
+      .from(products)
+      .where(matching)
+      .groupBy(products.supplierId),
+    db
+      .select({
+        min: min(productVariants.price),
+        max: max(productVariants.price),
+      })
+      .from(productVariants)
+      .innerJoin(products, eq(products.id, productVariants.productId))
+      .where(matching),
     listAttributes().then(
       (attributes) =>
         new Map(attributes.map((attribute) => [attribute.id, attribute])),
     ),
   ])
 
+  const bounds = priceRows[0]
+  const price =
+    bounds && bounds.min !== null && bounds.max !== null
+      ? { min: bounds.min, max: bounds.max }
+      : null
+
+  const suppliers = supplierRows
+    .flatMap((row) => {
+      const supplier = supplierById.get(row.supplierId)
+      if (!supplier) return []
+      return [{ slug: supplier.slug, name: supplier.name, count: row.count }]
+    })
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+
   const bySlug = new Map<string, AttributeFacet>()
-  for (const row of rows) {
+  for (const row of specRows) {
     const attribute = attributeById.get(row.attributeId)
     if (!attribute) continue
     const facet = bySlug.get(attribute.slug) ?? {
@@ -942,5 +996,5 @@ export const getFacets = async (): Promise<ProductFacets> => {
     )
   }
 
-  return { attributes }
+  return { price, suppliers, attributes }
 }
