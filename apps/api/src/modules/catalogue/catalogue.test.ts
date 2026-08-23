@@ -1005,6 +1005,97 @@ describe('publish and browse publicly', () => {
   })
 })
 
+describe('product facets', () => {
+  const facets = () => app.request('/catalogue/products/facets')
+
+  const publishedWithSpecs = async (
+    cookie: string,
+    data: Seed,
+    slug: string,
+    specs: { attributeId: string; value: string }[],
+    overrides: Record<string, unknown> = {},
+  ): Promise<string> => {
+    const id = await createProduct(cookie, data, { slug, ...overrides })
+    await putSpecs(id, cookie, { specs })
+    const res = await publishProduct(id, cookie)
+    if (res.status !== 200) {
+      throw new Error(`publish failed with status ${res.status}`)
+    }
+    return id
+  }
+
+  it('aggregates spec values across published products of visible suppliers', async () => {
+    const admin = await loginAs(ADMIN)
+    const data = await seed(admin)
+    await showSupplier(data.supplierId)
+
+    await publishedWithSpecs(admin, data, 'white-cement', [
+      { attributeId: data.material, value: 'Wood' },
+      { attributeId: data.width, value: '120' },
+    ])
+    await publishedWithSpecs(admin, data, 'grey-cement', [
+      { attributeId: data.material, value: 'Wood' },
+    ])
+
+    const draft = await createProduct(admin, data, { slug: 'blue-cement' })
+    await putSpecs(draft, admin, {
+      specs: [{ attributeId: data.material, value: 'Steel' }],
+    })
+
+    await publishedWithSpecs(
+      admin,
+      data,
+      'hidden-cement',
+      [{ attributeId: data.material, value: 'Marble' }],
+      { supplierId: data.otherSupplierId },
+    )
+
+    const res = await facets()
+
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({
+      attributes: [
+        {
+          slug: 'material',
+          name: 'Material',
+          unit: null,
+          values: [{ value: 'Wood', count: 2 }],
+        },
+        {
+          slug: 'width',
+          name: 'Width',
+          unit: 'cm',
+          values: [{ value: '120', count: 1 }],
+        },
+      ],
+    })
+  })
+
+  it('orders values by count descending then alphabetically', async () => {
+    const admin = await loginAs(ADMIN)
+    const data = await seed(admin)
+    await showSupplier(data.supplierId)
+
+    const values = ['Steel', 'Steel', 'Zinc', 'Aluminium']
+    for (const [index, value] of values.entries()) {
+      await publishedWithSpecs(admin, data, `tile-${index}`, [
+        { attributeId: data.material, value },
+      ])
+    }
+
+    const res = await facets()
+    const body = (await res.json()) as {
+      attributes: { values: { value: string; count: number }[] }[]
+    }
+
+    expect(body.attributes[0]?.values).toEqual([
+      { value: 'Steel', count: 2 },
+      { value: 'Aluminium', count: 1 },
+      { value: 'Zinc', count: 1 },
+    ])
+  })
+})
+
 describe('delete a product', () => {
   it('removes the product and everything it owns, keeping media', async () => {
     const admin = await loginAs(ADMIN)

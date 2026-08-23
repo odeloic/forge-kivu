@@ -879,3 +879,68 @@ export const getPublished = async (
 
   return row ? buildDetail(row) : null
 }
+
+export type FacetValue = { value: string; count: number }
+
+export type AttributeFacet = {
+  slug: string
+  name: string
+  unit: string | null
+  values: FacetValue[]
+}
+
+export type ProductFacets = {
+  attributes: AttributeFacet[]
+}
+
+export const getFacets = async (): Promise<ProductFacets> => {
+  const supplierIds = (await listVisibleSuppliers()).map((row) => row.id)
+  if (supplierIds.length === 0) return { attributes: [] }
+
+  const [rows, attributeById] = await Promise.all([
+    db
+      .select({
+        attributeId: productSpecs.attributeId,
+        value: productSpecs.value,
+        count: count(),
+      })
+      .from(productSpecs)
+      .innerJoin(products, eq(products.id, productSpecs.productId))
+      .where(
+        and(
+          eq(products.status, PRODUCT_STATUSES.PUBLISHED),
+          inArray(products.supplierId, supplierIds),
+        ),
+      )
+      .groupBy(productSpecs.attributeId, productSpecs.value),
+    listAttributes().then(
+      (attributes) =>
+        new Map(attributes.map((attribute) => [attribute.id, attribute])),
+    ),
+  ])
+
+  const bySlug = new Map<string, AttributeFacet>()
+  for (const row of rows) {
+    const attribute = attributeById.get(row.attributeId)
+    if (!attribute) continue
+    const facet = bySlug.get(attribute.slug) ?? {
+      slug: attribute.slug,
+      name: attribute.name,
+      unit: attribute.unit,
+      values: [],
+    }
+    facet.values.push({ value: row.value, count: row.count })
+    bySlug.set(attribute.slug, facet)
+  }
+
+  const attributes = [...bySlug.values()].sort((a, b) =>
+    a.name.localeCompare(b.name),
+  )
+  for (const facet of attributes) {
+    facet.values.sort(
+      (a, b) => b.count - a.count || a.value.localeCompare(b.value),
+    )
+  }
+
+  return { attributes }
+}
