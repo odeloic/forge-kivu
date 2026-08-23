@@ -15,3 +15,10 @@ export const createClient = (
   baseUrl: string,
   options?: ClientOptions,
 ): ApiClient => hc<AppType>(baseUrl, options)
+
+export type ProductPage = InferResponseType<
+  ApiClient['catalogue']['products']['$get'],
+  200
+>
+
+export type ProductListItem = ProductPage['items'][number]
