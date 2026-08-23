@@ -1,4 +1,6 @@
 <script setup lang="ts">
+const { data: facets } = await useProductFacets()
+
 const MATERIALS = ['Steel', 'Plastic', 'Aluminum', 'Wood']
 
 const COLORS = [
@@ -32,13 +34,13 @@ const SPACES = [
   <aside class="filters">
     <h2 class="title">Filter</h2>
 
-    <fieldset class="section">
+    <fieldset v-if="facets?.price" class="section">
       <legend>Price</legend>
       <div class="price-bounds">
-        <span>5,000 RWF</span>
-        <span>500,000 RWF</span>
+        <span>{{ formatRwf(facets.price.min) }}</span>
+        <span>{{ formatRwf(facets.price.max) }}</span>
       </div>
-      <input type="range" min="5000" max="500000" step="5000" />
+      <input type="range" :min="facets.price.min" :max="facets.price.max" />
     </fieldset>
 
     <fieldset class="section">

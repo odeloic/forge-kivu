@@ -3,11 +3,17 @@ definePageMeta({ access: 'public' })
 
 const api = useApi()
 
-const { data: products } = await useAsyncData('products', async () => {
-  const res = await api.catalogue.products.$get({ query: {} })
-  if (!res.ok) return null
-  return res.json()
-})
+const { query } = useCatalogueFilters()
+
+const { data: products } = await useAsyncData(
+  'products',
+  async () => {
+    const res = await api.catalogue.products.$get({ query: query.value })
+    if (!res.ok) return null
+    return res.json()
+  },
+  { watch: [query] },
+)
 </script>
 
 <template>
