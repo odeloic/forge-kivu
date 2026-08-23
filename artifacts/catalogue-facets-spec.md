@@ -1,0 +1,66 @@
+# Catalogue Facets Spec
+
+Feeds the public product filter sidebar (`ProductFilters.vue`). Companion to the catalogue module spec — the products list and its filters already exist; this adds the endpoint that tells the UI *what* can be filtered.
+
+## Decisions
+
+1. **Postgres computes the facets — no search engine.** Same database, same transaction-consistent view as the product list; no sync pipeline to operate. ~~At this catalogue size the grouped queries are sub-millisecond with an index on `product_specs (attribute_id, value)`. Reconsider only when full-text search with typo tolerance and ranking becomes a requirement; the endpoint contract stays the same either way, so Typesense later is a swap, not a rewrite~~ (Irrelevant information).
+2. **One public endpoint: `GET /catalogue/products/facets`.** It accepts exactly the same query params as `GET /catalogue/products` (`category`, `supplier`, `spec.<slug>=<value>`) and reuses the same condition-building logic (published status, visible suppliers, category subtree, spec EXISTS). One source of truth for what "matches" means.
+3. **Facets are scoped to the current filters.** The sidebar refines as the user filters: value lists and counts reflect the remaining result set, not the whole catalogue. Consequence, accepted: attribute sections vanish entirely when no remaining product carries them.
+4. **All spec attributes are facet dimensions.** No curation flag on `spec_attributes` — every attribute with at least one value on a matching published product becomes a sidebar section. If the list grows noisy, a `filterable` flag on the attribute is the later fix.
+5. **Suppliers are a facet dimension too** — rendered as "Brand" in the UI. Uses the existing `?supplier=<slug>` param, so it needs no new filter mechanics, only its value list and counts in the response.
+6. **Counts use the exclude-own-dimension rule.** Each dimension's counts are computed with every active filter applied *except its own*. This keeps sibling values visible and correctly counted once a value is selected (checking "Wood" must not zero out "Steel"). Values with zero matches are omitted.
+7. **Price bounds come from `product_variants.price`** — min and max across matching products (scoped like everything else, excluding any future price filter's own value). Null when no matching variant has a price. The hardcoded 5,000–500,000 in the sidebar dies.
+8. **Availability stays out.** Nothing in the schema models stock; the section remains decorative until an availability model exists.
+9. **Single value per attribute for now.** The existing `spec.<slug>=<value>` contract is one value per attribute; multi-select within a section (OR semantics, repeated params) is deferred and purely additive.
+
+## Response shape
+
+```jsonc
+{
+  "price": { "min": 5000, "max": 395000 },        // null when no priced variant matches
+  "suppliers": [
+    { "slug": "kivu-home-interiors", "name": "Kivu Home & Interiors", "count": 8 }
+  ],
+  "attributes": [
+    {
+      "slug": "material",
+      "name": "Material",
+      "unit": null,
+      "values": [
+        { "value": "Wood", "count": 12 },
+        { "value": "Steel", "count": 5 }
+      ]
+    }
+  ]
+}
+```
+
+Ordering: suppliers and values by count descending, then alphabetically; attributes alphabetically.
+
+## Query plan sketch
+
+Per request, sharing the list endpoint's `conditions` builder:
+
+- one grouped query per dimension family — `product_specs` joined to `spec_attributes` grouped by `(slug, name, unit, value)`, suppliers grouped by `(slug, name)`, and a min/max over `product_variants.price` — each with the own-dimension filter dropped;
+- all run in parallel; no N+1 per attribute.
+
+
+## Vertical slices
+
+Not a separate module — a read endpoint over catalogue tables, so it lives in `catalogue` (service function + route + schema). Each slice ships and is validated before the next starts.
+
+1. **Unscoped attribute facets.** `GET /catalogue/products/facets` returns `attributes` only, whole catalogue, ignoring query params. Validate: curl matches a hand-run SQL count against seed data.
+2. **Suppliers + price bounds.** Add the `suppliers` and `price` fields, still unscoped. Validate: counts sum to published product totals; bounds match min/max of seeded variant prices.
+3. **Scoping.** Parse the list query params, apply shared conditions with the exclude-own-dimension rule. Validate: `?supplier=X` keeps all suppliers listed but rescopes attribute counts; `?spec.material=Wood` keeps Steel visible with its count.
+4. **Sidebar renders facets.** `ProductFilters` fetches the endpoint (SSR) and renders sections from it; hardcoded arrays deleted; controls not yet interactive. Validate: sidebar sections mirror the curl output.
+5. **Filter state in the URL.** Checking a value updates the query on `/`; list and facets both refetch from it. Validate: filtered SSR page load renders the refined list and counts directly.
+
+## ~~Veto if wrong~~ Decided
+
+1. Endpoint path `GET /catalogue/products/facets`
+2. Response field names `price` / `suppliers` / `attributes` and count-descending ordering.
+3. Zero-count values omitted rather than shown disabled.
+4. Attributes with no matching values omitted rather than shown empty.
+5. Color hexes mapped client-side by value name, not stored in the database.
+6. Facets and product list are two requests, not one combined response.
