@@ -15,11 +15,13 @@ export default [
   ...vue,
   {
     files: [
+      'apps/admin/app/{app,error}.vue',
+      'apps/admin/app/{pages,layouts}/**/*.vue',
       'apps/web/app/{app,error}.vue',
       'apps/web/app/{pages,layouts}/**/*.vue',
     ],
     rules: {
-      'vue/multi-word-component-names': 'off'
+      'vue/multi-word-component-names': 'off',
     },
   },
 ]

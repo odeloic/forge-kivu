@@ -3,7 +3,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { app } from '../../app'
 import { db } from '../../db'
-import { jsonRequest, loginAs, resetDatabase } from '../../test/helpers'
+import {
+  jsonRequest,
+  loginAs,
+  loginAsAdmin,
+  resetDatabase,
+} from '../../test/helpers'
 import { ROLES } from '@forge-kivu/types'
 import { platformSettings } from './settings.tables'
 
@@ -42,7 +47,7 @@ describe('GET /settings', () => {
 
 describe('PATCH /admin/settings', () => {
   it('updates currency as admin and reflects it on the public read', async () => {
-    const cookie = await loginAs(ADMIN)
+    const cookie = await loginAsAdmin(ADMIN)
 
     const res = await patchSettings({ currency: 'USD' }, cookie)
     expect(res.status).toBe(200)
@@ -52,11 +57,11 @@ describe('PATCH /admin/settings', () => {
     expect(await read.json()).toMatchObject({ ...SEED, currency: 'USD' })
   })
 
-  it('returns 403 for a basic user', async () => {
+  it('returns 401 for a workshop session', async () => {
     const cookie = await loginAs(BASIC)
 
     const res = await patchSettings({ currency: 'USD' }, cookie)
-    expect(res.status).toBe(403)
+    expect(res.status).toBe(401)
   })
 
   it('returns 401 without a session', async () => {
@@ -65,14 +70,14 @@ describe('PATCH /admin/settings', () => {
   })
 
   it('returns 400 for an empty currency', async () => {
-    const cookie = await loginAs(ADMIN)
+    const cookie = await loginAsAdmin(ADMIN)
 
     const res = await patchSettings({ currency: '' }, cookie)
     expect(res.status).toBe(400)
   })
 
   it('returns 400 for an empty patch', async () => {
-    const cookie = await loginAs(ADMIN)
+    const cookie = await loginAsAdmin(ADMIN)
 
     const res = await patchSettings({}, cookie)
     expect(res.status).toBe(400)

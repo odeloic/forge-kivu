@@ -3,7 +3,12 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import { app } from '../../app'
 import { db } from '../../db'
-import { jsonRequest, loginAs, resetDatabase } from '../../test/helpers'
+import {
+  jsonRequest,
+  loginAs,
+  loginAsAdmin,
+  resetDatabase,
+} from '../../test/helpers'
 import { ROLES } from '@forge-kivu/types'
 import { categories, specAttributes } from './taxonomy.tables'
 
@@ -83,7 +88,7 @@ beforeEach(async () => {
 
 describe('create a category', () => {
   it('nests a child under its parent in the public tree', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const tiles = await createdCategoryId(admin, {
       name: 'Tiles',
       slug: 'tiles',
@@ -120,7 +125,7 @@ describe('create a category', () => {
   })
 
   it('rejects a slug that is already used', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     await postCategory(admin, { name: 'Tiles', slug: 'tiles' })
 
     const res = await postCategory(admin, { name: 'Roof Tiles', slug: 'tiles' })
@@ -131,7 +136,7 @@ describe('create a category', () => {
   })
 
   it('rejects a parent that does not exist', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
 
     const res = await postCategory(admin, {
       name: 'Floor Tiles',
@@ -147,7 +152,7 @@ describe('create a category', () => {
   })
 
   it('rejects an invalid slug', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
 
     const res = await postCategory(admin, { name: 'Tiles', slug: 'Tiles!' })
 
@@ -155,14 +160,14 @@ describe('create a category', () => {
     expect(await db.select().from(categories)).toHaveLength(0)
   })
 
-  it('rejects a basic user and an anonymous request', async () => {
+  it('rejects a workshop session and an anonymous request', async () => {
     const basic = await loginAs(BASIC)
     const body = { name: 'Tiles', slug: 'tiles' }
 
-    const forbidden = await postCategory(basic, body)
+    const workshop = await postCategory(basic, body)
     const unauthenticated = await postCategory('', body)
 
-    expect(forbidden.status).toBe(403)
+    expect(workshop.status).toBe(401)
     expect(unauthenticated.status).toBe(401)
     expect(await db.select().from(categories)).toHaveLength(0)
   })
@@ -177,7 +182,7 @@ describe('read the category tree', () => {
   })
 
   it('orders top level categories by sort order', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     await postCategory(admin, { name: 'Paint', slug: 'paint', sortOrder: 5 })
     await postCategory(admin, { name: 'Tiles', slug: 'tiles', sortOrder: 1 })
 
@@ -192,7 +197,7 @@ describe('read the category tree', () => {
 
 describe('update a category', () => {
   it('edits the name, slug and sort order', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const id = await createdCategoryId(admin, { name: 'Tiles', slug: 'tiles' })
 
     const res = await patchCategory(id, admin, {
@@ -210,7 +215,7 @@ describe('update a category', () => {
   })
 
   it('moves a category to the top level', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const tiles = await createdCategoryId(admin, {
       name: 'Tiles',
       slug: 'tiles',
@@ -232,7 +237,7 @@ describe('update a category', () => {
   })
 
   it('rejects moving a category under its own descendant', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const tiles = await createdCategoryId(admin, {
       name: 'Tiles',
       slug: 'tiles',
@@ -255,7 +260,7 @@ describe('update a category', () => {
   })
 
   it('rejects a category as its own parent', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const id = await createdCategoryId(admin, { name: 'Tiles', slug: 'tiles' })
 
     const res = await patchCategory(id, admin, { parentId: id })
@@ -265,7 +270,7 @@ describe('update a category', () => {
   })
 
   it('rejects a slug another category already uses', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const id = await createdCategoryId(admin, { name: 'Tiles', slug: 'tiles' })
     await postCategory(admin, { name: 'Paint', slug: 'paint' })
 
@@ -276,7 +281,7 @@ describe('update a category', () => {
   })
 
   it('rejects an empty patch and an unknown category', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const id = await createdCategoryId(admin, { name: 'Tiles', slug: 'tiles' })
 
     const empty = await patchCategory(id, admin, {})
@@ -288,22 +293,22 @@ describe('update a category', () => {
     expect(unknown.status).toBe(404)
   })
 
-  it('rejects a basic user and an anonymous request', async () => {
-    const admin = await loginAs(ADMIN)
+  it('rejects a workshop session and an anonymous request', async () => {
+    const admin = await loginAsAdmin(ADMIN)
     const basic = await loginAs(BASIC)
     const id = await createdCategoryId(admin, { name: 'Tiles', slug: 'tiles' })
 
-    const forbidden = await patchCategory(id, basic, { name: 'Paint' })
+    const workshop = await patchCategory(id, basic, { name: 'Paint' })
     const unauthenticated = await patchCategory(id, '', { name: 'Paint' })
 
-    expect(forbidden.status).toBe(403)
+    expect(workshop.status).toBe(401)
     expect(unauthenticated.status).toBe(401)
   })
 })
 
 describe('delete a category', () => {
   it('removes a leaf category', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const id = await createdCategoryId(admin, { name: 'Tiles', slug: 'tiles' })
 
     const res = await deleteCategory(id, admin)
@@ -313,7 +318,7 @@ describe('delete a category', () => {
   })
 
   it('refuses a category that still has children', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const tiles = await createdCategoryId(admin, {
       name: 'Tiles',
       slug: 'tiles',
@@ -334,22 +339,22 @@ describe('delete a category', () => {
   })
 
   it('returns 404 for an unknown category', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
 
     const res = await deleteCategory(crypto.randomUUID(), admin)
 
     expect(res.status).toBe(404)
   })
 
-  it('rejects a basic user and an anonymous request', async () => {
-    const admin = await loginAs(ADMIN)
+  it('rejects a workshop session and an anonymous request', async () => {
+    const admin = await loginAsAdmin(ADMIN)
     const basic = await loginAs(BASIC)
     const id = await createdCategoryId(admin, { name: 'Tiles', slug: 'tiles' })
 
-    const forbidden = await deleteCategory(id, basic)
+    const workshop = await deleteCategory(id, basic)
     const unauthenticated = await deleteCategory(id, '')
 
-    expect(forbidden.status).toBe(403)
+    expect(workshop.status).toBe(401)
     expect(unauthenticated.status).toBe(401)
     expect(await db.select().from(categories)).toHaveLength(1)
   })
@@ -357,7 +362,7 @@ describe('delete a category', () => {
 
 describe('spec attributes', () => {
   it('lists what an admin created to an anonymous caller', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     await postAttribute(admin, { name: 'Material', slug: 'material' })
     await postAttribute(admin, { name: 'Width', slug: 'width', unit: 'cm' })
 
@@ -371,7 +376,7 @@ describe('spec attributes', () => {
   })
 
   it('rejects a name that differs only by case', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     await postAttribute(admin, { name: 'Material', slug: 'material' })
 
     const res = await postAttribute(admin, {
@@ -385,7 +390,7 @@ describe('spec attributes', () => {
   })
 
   it('rejects a slug that is already used', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     await postAttribute(admin, { name: 'Material', slug: 'material' })
 
     const res = await postAttribute(admin, { name: 'Finish', slug: 'material' })
@@ -395,7 +400,7 @@ describe('spec attributes', () => {
   })
 
   it('edits the name and clears the unit', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const id = await createdAttributeId(admin, {
       name: 'Width',
       slug: 'width',
@@ -409,7 +414,7 @@ describe('spec attributes', () => {
   })
 
   it('rejects an update to a name another attribute already uses', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     await postAttribute(admin, { name: 'Material', slug: 'material' })
     const id = await createdAttributeId(admin, { name: 'Width', slug: 'width' })
 
@@ -420,7 +425,7 @@ describe('spec attributes', () => {
   })
 
   it('removes an attribute and 404s on an unknown one', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const id = await createdAttributeId(admin, {
       name: 'Material',
       slug: 'material',
@@ -434,8 +439,8 @@ describe('spec attributes', () => {
     expect(await db.select().from(specAttributes)).toHaveLength(0)
   })
 
-  it('rejects a basic user and an anonymous request on writes', async () => {
-    const admin = await loginAs(ADMIN)
+  it('rejects a workshop session and an anonymous request on writes', async () => {
+    const admin = await loginAsAdmin(ADMIN)
     const basic = await loginAs(BASIC)
     const id = await createdAttributeId(admin, {
       name: 'Material',
@@ -450,9 +455,9 @@ describe('spec attributes', () => {
       slug: 'grip',
     })
 
-    expect(created.status).toBe(403)
-    expect(patched.status).toBe(403)
-    expect(removed.status).toBe(403)
+    expect(created.status).toBe(401)
+    expect(patched.status).toBe(401)
+    expect(removed.status).toBe(401)
     expect(unauthenticated.status).toBe(401)
     expect(await db.select().from(specAttributes)).toHaveLength(1)
   })

@@ -1,5 +1,6 @@
 export {
   passwordResetTokens,
+  sessionAudience,
   sessions,
   userRole,
   users,

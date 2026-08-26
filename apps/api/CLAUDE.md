@@ -4,7 +4,7 @@
 - **Cross-module flow is one direction**: `routes → own service → own tables + other services` (:warning: If two services call each other, merge them or extract the shared part.)
 - No controller classes
 - Chain routes inside each module `(new Hono().get().post(...))`
-- **Admin routes live under `/admin`**: a module exports a separate admin sub-app carrying no auth middleware of its own; the guard is applied once where `/admin` is mounted in `app.ts`. Authenticated-but-not-admin routes keep their plain resource path. See `artifacts/api-route-conventions.md`
+- **Admin routes live under `/admin`**: a module exports a separate admin sub-app carrying no auth middleware of its own; the guard is applied once in `modules/admin/admin.routes.ts`, which `app.ts` mounts at `/admin`. The guard is `admin-auth` plus `requireRole('admin')`: only the `admin_session` cookie backed by an `audience = 'admin'` session. Authenticated-but-not-admin routes keep their plain resource path. See `artifacts/api-route-conventions.md`
 - Handlers inline, logic in service functions
 - Middlewares should be typed
 - No dependency-injection container. Plain functions and module-scope singletons. For better testability and Hono specific

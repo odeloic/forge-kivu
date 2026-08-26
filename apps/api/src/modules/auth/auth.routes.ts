@@ -4,6 +4,7 @@ import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
 
 import { AppError } from '../../lib/errors'
 import { auth } from '../../middleware/auth'
+import { SESSION_AUDIENCES } from './auth.tables'
 import {
   loginSchema,
   passwordResetConfirmSchema,
@@ -38,7 +39,7 @@ export const authRoutes = new Hono()
   })
   .post('/logout', async (c) => {
     const token = getCookie(c, SESSION_COOKIE)
-    if (token) await invalidateSession(token)
+    if (token) await invalidateSession(token, SESSION_AUDIENCES.WORKSHOP)
     deleteCookie(c, SESSION_COOKIE, { path: '/' })
     return c.body(null, 204)
   })

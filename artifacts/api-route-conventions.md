@@ -20,6 +20,11 @@ of restating it.
    uncacheable by definition; public paths need no `Vary: Cookie` and can sit
    behind a CDN. A dual-audience URL would be one cache misconfiguration away from
    serving hidden rows to the public.
+6. **The namespace has its own audience and cookie.** The guard is `admin-auth`
+   plus `requireRole('admin')`: it accepts only the `admin_session` cookie backed
+   by a session carrying `audience = 'admin'`. A workshop session never
+   authorizes an admin request, so a workshop cookie answers 401, not 403. See
+   `artifacts/admin-endpoints-module-spec.md`.
 
 ## Not every non-public route is an admin route
 
@@ -37,13 +42,30 @@ merely "needs a login".
 ## Composition
 
 Each module exports its public sub-app and, when it has admin routes, a second
-sub-app. `app.ts` is the composition root:
+sub-app.
+
+~~`app.ts` is the composition root:~~
+
+~~```ts~~
+~~const adminRoutes = new Hono()~~
+~~  .use('*', auth, requireRole(ROLES.ADMIN))~~
+~~  .route('/suppliers', adminSupplierRoutes)~~
+~~  .route('/products', adminProductRoutes)~~
+~~```~~
+
+`modules/admin/admin.routes.ts` is the composition root for the namespace;
+`app.ts` mounts only `adminRoutes`. The admin module's own auth routes sit
+outside the guard, so they are registered before it:
 
 ```ts
-const adminRoutes = new Hono()
-  .use('*', auth, requireRole(ROLES.ADMIN))
+const adminDomainRoutes = new Hono()
+  .use('*', adminAuth, requireRole(ROLES.ADMIN))
   .route('/suppliers', adminSupplierRoutes)
   .route('/products', adminProductRoutes)
+
+export const adminRoutes = new Hono()
+  .route('/auth', adminAuthRoutes)
+  .route('/', adminDomainRoutes)
 
 export const app = new Hono<...>()
   ...
@@ -69,3 +91,7 @@ Two things this buys, both verified against Hono 4.13.1:
 3. **Keep the chain unbroken** (`.use().route().route()`). `packages/api-client`
    infers its types from `AppType`; splitting the chain into statements loses the
    inference.
+4. **`/admin/auth` is exempt by registration order, not by exception.** Login and
+   logout are mounted before the guarded sub-app, so the guard never runs for
+   them. Anything registered after the guard is guarded; the failure mode of
+   getting this wrong is a 401 on login, not an open route.

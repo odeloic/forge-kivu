@@ -2,6 +2,7 @@ import { getCookie } from 'hono/cookie'
 import { createMiddleware } from 'hono/factory'
 
 import { AppError } from '../lib/errors'
+import { SESSION_AUDIENCES } from '../modules/auth/auth.tables'
 import {
   SESSION_COOKIE,
   validateSession,
@@ -20,7 +21,7 @@ export const auth = createMiddleware<AuthEnv>(async (c, next) => {
   const token = getCookie(c, SESSION_COOKIE)
   if (!token) throw new AppError('UNAUTHENTICATED')
 
-  const result = await validateSession(token)
+  const result = await validateSession(token, SESSION_AUDIENCES.WORKSHOP)
   if (!result) throw new AppError('UNAUTHENTICATED')
 
   c.set('user', result.user)

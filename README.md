@@ -16,7 +16,7 @@ Install dependencies from the repository root:
 pnpm install
 ```
 
-Start the API and web application together:
+Start the API and frontend applications together:
 
 ```sh
 pnpm dev
@@ -24,6 +24,7 @@ pnpm dev
 
 - Web: http://localhost:3000
 - API: http://localhost:3001
+- Admin: http://localhost:3002
 
 ## Commands
 
@@ -42,6 +43,7 @@ pnpm format:check
 ## Workspace structure
 
 - `apps/api`: Bun and Hono API
+- `apps/admin`: Nuxt admin application
 - `apps/web`: Nuxt application
 - `packages/api-client`: compiled type-safe Hono client
 - `packages/types`: shared schemas and types

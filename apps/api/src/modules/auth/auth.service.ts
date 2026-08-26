@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import type { CookieOptions } from 'hono/utils/cookie'
 
 import type { Role } from '@forge-kivu/types'
@@ -8,11 +8,17 @@ import { isUniqueViolation } from '../../db/errors'
 import { env } from '../../env'
 import { AppError } from '../../lib/errors'
 import { sendMail } from '../../lib/mail'
-import { passwordResetTokens, sessions, users } from './auth.tables'
+import {
+  passwordResetTokens,
+  SESSION_AUDIENCES,
+  sessions,
+  users,
+  type SessionAudience,
+} from './auth.tables'
 
 export const SESSION_COOKIE = 'session'
 
-const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000
+export const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000
 const PASSWORD_RESET_TTL_MS = 15 * 60 * 1000
 const TOKEN_BYTES = 32
 
@@ -30,7 +36,13 @@ export type AuthUser = {
 export type AuthSession = {
   id: string
   userId: string
+  audience: SessionAudience
   expiresAt: Date
+}
+
+export type Credentials = {
+  id: string
+  role: Role
 }
 
 const publicUserColumns = {
@@ -64,11 +76,15 @@ const hashToken = async (token: string): Promise<string> => {
 
 const normalizeEmail = (email: string): string => email.trim().toLowerCase()
 
-const createSession = async (userId: string): Promise<string> => {
+export const createSession = async (
+  userId: string,
+  audience: SessionAudience,
+): Promise<string> => {
   const token = generateToken()
   await db.insert(sessions).values({
     id: await hashToken(token),
     userId,
+    audience,
     expiresAt: new Date(Date.now() + SESSION_TTL_MS),
   })
   return token
@@ -96,15 +112,19 @@ export const signup = async (
   const [user] = created
   if (!user) throw new Error('Signup failed: insert returned no row')
 
-  return createSession(user.id)
+  return createSession(user.id, SESSION_AUDIENCES.WORKSHOP)
 }
 
-export const login = async (
+export const verifyCredentials = async (
   email: string,
   password: string,
-): Promise<string | null> => {
+): Promise<Credentials | null> => {
   const [user] = await db
-    .select({ id: users.id, passwordHash: users.passwordHash })
+    .select({
+      id: users.id,
+      role: users.role,
+      passwordHash: users.passwordHash,
+    })
     .from(users)
     .where(eq(users.email, normalizeEmail(email)))
     .limit(1)
@@ -116,11 +136,22 @@ export const login = async (
 
   if (!(await Bun.password.verify(password, user.passwordHash))) return null
 
-  return createSession(user.id)
+  return { id: user.id, role: user.role }
+}
+
+export const login = async (
+  email: string,
+  password: string,
+): Promise<string | null> => {
+  const user = await verifyCredentials(email, password)
+  if (!user) return null
+
+  return createSession(user.id, SESSION_AUDIENCES.WORKSHOP)
 }
 
 export const validateSession = async (
   token: string,
+  audience: SessionAudience,
 ): Promise<{ user: AuthUser; session: AuthSession } | null> => {
   const sessionId = await hashToken(token)
 
@@ -129,13 +160,14 @@ export const validateSession = async (
       session: {
         id: sessions.id,
         userId: sessions.userId,
+        audience: sessions.audience,
         expiresAt: sessions.expiresAt,
       },
       user: publicUserColumns,
     })
     .from(sessions)
     .innerJoin(users, eq(sessions.userId, users.id))
-    .where(eq(sessions.id, sessionId))
+    .where(and(eq(sessions.id, sessionId), eq(sessions.audience, audience)))
     .limit(1)
 
   if (!row) return null
@@ -159,8 +191,18 @@ export const validateSession = async (
   return row
 }
 
-export const invalidateSession = async (token: string): Promise<void> => {
-  await db.delete(sessions).where(eq(sessions.id, await hashToken(token)))
+export const invalidateSession = async (
+  token: string,
+  audience: SessionAudience,
+): Promise<void> => {
+  await db
+    .delete(sessions)
+    .where(
+      and(
+        eq(sessions.id, await hashToken(token)),
+        eq(sessions.audience, audience),
+      ),
+    )
 }
 
 export const invalidateAllSessions = async (userId: string): Promise<void> => {

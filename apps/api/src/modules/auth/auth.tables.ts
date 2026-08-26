@@ -4,6 +4,19 @@ import { ROLES } from '@forge-kivu/types'
 
 export const userRole = pgEnum('user_role', [ROLES.BASIC, ROLES.ADMIN])
 
+export const SESSION_AUDIENCES = {
+  WORKSHOP: 'workshop',
+  ADMIN: 'admin',
+} as const
+
+export type SessionAudience =
+  (typeof SESSION_AUDIENCES)[keyof typeof SESSION_AUDIENCES]
+
+export const sessionAudience = pgEnum('session_audience', [
+  SESSION_AUDIENCES.WORKSHOP,
+  SESSION_AUDIENCES.ADMIN,
+])
+
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
   email: text('email').notNull().unique(),
@@ -19,6 +32,9 @@ export const sessions = pgTable('sessions', {
   userId: uuid('user_id')
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
+  audience: sessionAudience('audience')
+    .notNull()
+    .default(SESSION_AUDIENCES.WORKSHOP),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
 })
 

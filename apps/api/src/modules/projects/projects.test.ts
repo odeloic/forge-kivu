@@ -3,7 +3,12 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import { app } from '../../app'
 import { db } from '../../db'
-import { jsonRequest, loginAs, resetDatabase } from '../../test/helpers'
+import {
+  jsonRequest,
+  loginAs,
+  loginAsAdmin,
+  resetDatabase,
+} from '../../test/helpers'
 import { ROLES } from '@forge-kivu/types'
 import { projectItems, projects } from './projects.tables'
 
@@ -339,7 +344,7 @@ describe('delete a project', () => {
 
 describe('manage project items', () => {
   it('upserts the same row on repeated PUT', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const { variantId } = await seededProduct(admin, 'cement-tile', true)
     const owner = await loginAs(OWNER)
     const id = await createProject(owner)
@@ -363,7 +368,7 @@ describe('manage project items', () => {
   })
 
   it('includes item variant and product data in the project detail', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const { productId, variantId } = await seededProduct(
       admin,
       'cement-tile',
@@ -402,7 +407,7 @@ describe('manage project items', () => {
   })
 
   it('rejects a variant of a draft product', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const { variantId } = await seededProduct(admin, 'draft-tile', false)
     const owner = await loginAs(OWNER)
     const id = await createProject(owner)
@@ -430,7 +435,7 @@ describe('manage project items', () => {
   })
 
   it('rejects a quantity below 1', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const { variantId } = await seededProduct(admin, 'cement-tile', true)
     const owner = await loginAs(OWNER)
     const id = await createProject(owner)
@@ -443,7 +448,7 @@ describe('manage project items', () => {
   })
 
   it('hides another user project behind a 404', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const { variantId } = await seededProduct(admin, 'cement-tile', true)
     const owner = await loginAs(OWNER)
     const id = await createProject(owner)
@@ -455,7 +460,7 @@ describe('manage project items', () => {
   })
 
   it('removes an item', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const { variantId } = await seededProduct(admin, 'cement-tile', true)
     const owner = await loginAs(OWNER)
     const id = await createProject(owner)
@@ -475,7 +480,7 @@ describe('manage project items', () => {
   })
 
   it('deletes item rows with the project', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const { variantId } = await seededProduct(admin, 'cement-tile', true)
     const owner = await loginAs(OWNER)
     const id = await createProject(owner)
@@ -493,7 +498,7 @@ describe('manage project items', () => {
   })
 
   it('blocks catalogue variant deletion while an item exists', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const { productId, variantId } = await seededProduct(
       admin,
       'cement-tile',

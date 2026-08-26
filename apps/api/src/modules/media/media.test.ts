@@ -6,11 +6,10 @@ import { app } from '../../app'
 import { db } from '../../db'
 import { env } from '../../env'
 import { s3 } from '../../storage'
-import { ROLES } from '@forge-kivu/types'
 import { MAX_SIZE_BYTES } from './media.schemas'
 import { getPublicUrl, getReady } from './media.service'
 import { media, MEDIA_STATUSES } from './media.tables'
-import { loginAs, resetDatabase } from '../../test/helpers'
+import { loginAs, loginAsAdmin, resetDatabase } from '../../test/helpers'
 import {
   confirmUpload as confirm,
   ensurePublicBucket,
@@ -240,11 +239,7 @@ describe('serve and delete', () => {
       email: 'ada@example.com',
       password: 'correct horse',
     })
-    const admin = await loginAs({
-      email: 'admin@example.com',
-      password: 'correct horse',
-      role: ROLES.ADMIN,
-    })
+    const admin = await loginAsAdmin()
     const row = await createReadyMedia(user)
 
     const res = await app.request(`/admin/media/${row.id}`, {
@@ -260,7 +255,7 @@ describe('serve and delete', () => {
     expect(head).toMatchObject({ name: 'NotFound' })
   })
 
-  it('rejects a delete from a non-admin', async () => {
+  it('rejects a delete from a workshop session', async () => {
     const user = await loginAs({
       email: 'ada@example.com',
       password: 'correct horse',
@@ -272,7 +267,7 @@ describe('serve and delete', () => {
       headers: { cookie: user, 'content-type': 'application/json' },
     })
 
-    expect(res.status).toBe(403)
+    expect(res.status).toBe(401)
     expect(
       await db.select().from(media).where(eq(media.id, row.id)),
     ).toHaveLength(1)

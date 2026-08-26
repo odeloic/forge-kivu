@@ -4,7 +4,12 @@ import { beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { app } from '../../app'
 import { db } from '../../db'
 import { env } from '../../env'
-import { jsonRequest, loginAs, resetDatabase } from '../../test/helpers'
+import {
+  jsonRequest,
+  loginAs,
+  loginAsAdmin,
+  resetDatabase,
+} from '../../test/helpers'
 import {
   createPendingMedia,
   createReadyMedia,
@@ -30,6 +35,8 @@ const ADMIN = {
 }
 
 const BASIC = { email: 'ada@example.com', password: 'correct horse' }
+
+const UPLOADER = { email: 'uploader@example.com', password: 'correct horse' }
 
 type Detail = {
   id: string
@@ -228,7 +235,7 @@ beforeEach(async () => {
 
 describe('create a product', () => {
   it('creates a draft with one default variant', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const data = await seed(admin)
 
     const res = await postProduct(
@@ -256,7 +263,7 @@ describe('create a product', () => {
   })
 
   it('rejects an unknown supplier and an unknown category', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const data = await seed(admin)
 
     const noSupplier = await postProduct(
@@ -280,7 +287,7 @@ describe('create a product', () => {
   })
 
   it('allows the same slug under a different supplier only', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const data = await seed(admin)
     await createProduct(admin, data)
 
@@ -299,7 +306,7 @@ describe('create a product', () => {
   })
 
   it('blocks deleting a supplier that still has products', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const data = await seed(admin)
     await createProduct(admin, data)
 
@@ -311,15 +318,15 @@ describe('create a product', () => {
     })
   })
 
-  it('rejects a basic user and an anonymous request', async () => {
-    const admin = await loginAs(ADMIN)
+  it('rejects a workshop session and an anonymous request', async () => {
+    const admin = await loginAsAdmin(ADMIN)
     const basic = await loginAs(BASIC)
     const data = await seed(admin)
 
-    const forbidden = await postProduct(basic, productBody(data))
+    const workshop = await postProduct(basic, productBody(data))
     const unauthenticated = await postProduct('', productBody(data))
 
-    expect(forbidden.status).toBe(403)
+    expect(workshop.status).toBe(401)
     expect(unauthenticated.status).toBe(401)
     expect(await db.select().from(products)).toHaveLength(0)
   })
@@ -327,7 +334,7 @@ describe('create a product', () => {
 
 describe('read and update a product as admin', () => {
   it('lists drafts and filters by supplier and status', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const data = await seed(admin)
     await createProduct(admin, data)
     const otherId = await createProduct(admin, data, {
@@ -351,7 +358,7 @@ describe('read and update a product as admin', () => {
   })
 
   it('edits fields and moves the product to another category', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const data = await seed(admin)
     const id = await createProduct(admin, data)
 
@@ -370,7 +377,7 @@ describe('read and update a product as admin', () => {
   })
 
   it('rejects an empty patch, an unknown product and an unknown category', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const data = await seed(admin)
     const id = await createProduct(admin, data)
 
@@ -388,23 +395,23 @@ describe('read and update a product as admin', () => {
   })
 
   it('returns 404 for an unknown product detail', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
 
     const res = await getProduct(crypto.randomUUID(), admin)
 
     expect(res.status).toBe(404)
   })
 
-  it('rejects a basic user and an anonymous request', async () => {
-    const admin = await loginAs(ADMIN)
+  it('rejects a workshop session and an anonymous request', async () => {
+    const admin = await loginAsAdmin(ADMIN)
     const basic = await loginAs(BASIC)
     const data = await seed(admin)
     const id = await createProduct(admin, data)
 
-    const forbidden = await getProduct(id, basic)
+    const workshop = await getProduct(id, basic)
     const unauthenticated = await getProduct(id)
 
-    expect(forbidden.status).toBe(403)
+    expect(workshop.status).toBe(401)
     expect(unauthenticated.status).toBe(401)
   })
 })
@@ -439,7 +446,7 @@ describe('options and variants', () => {
   }
 
   it('replaces the default variant with every combination', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const data = await seed(admin)
     const { id, detail } = await withOptions(admin, data)
 
@@ -490,7 +497,7 @@ describe('options and variants', () => {
   })
 
   it('keeps one default variant when options are replaced', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const data = await seed(admin)
     const { detail } = await withOptions(admin, data)
 
@@ -505,7 +512,7 @@ describe('options and variants', () => {
   })
 
   it('rejects an option value that belongs to another product', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const data = await seed(admin)
     const mine = await withOptions(admin, data)
     const theirs = await withOptions(admin, data, {
@@ -532,7 +539,7 @@ describe('options and variants', () => {
   })
 
   it('rejects two variants with the same combination and applies nothing', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const data = await seed(admin)
     const { id, detail } = await withOptions(admin, data)
     const combination = [
@@ -557,7 +564,7 @@ describe('options and variants', () => {
   })
 
   it('rejects a variant that skips an option', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const data = await seed(admin)
     const { id, detail } = await withOptions(admin, data)
 
@@ -574,7 +581,7 @@ describe('options and variants', () => {
   })
 
   it('rejects an empty variant list', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const data = await seed(admin)
     const id = await createProduct(admin, data)
 
@@ -585,7 +592,7 @@ describe('options and variants', () => {
   })
 
   it('prices a product that has no options through one variant', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const data = await seed(admin)
     const id = await createProduct(admin, data)
 
@@ -600,10 +607,10 @@ describe('options and variants', () => {
   })
 
   it('rejects a variant image that is not ready', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const data = await seed(admin)
     const id = await createProduct(admin, data)
-    const pending = await createPendingMedia(admin)
+    const pending = await createPendingMedia(await loginAs(UPLOADER))
 
     const res = await putVariants(id, admin, {
       variants: [{ price: 5, imageMediaId: pending }],
@@ -615,8 +622,8 @@ describe('options and variants', () => {
     })
   })
 
-  it('rejects a basic user on both replace routes', async () => {
-    const admin = await loginAs(ADMIN)
+  it('rejects a workshop session on both replace routes', async () => {
+    const admin = await loginAsAdmin(ADMIN)
     const basic = await loginAs(BASIC)
     const data = await seed(admin)
     const id = await createProduct(admin, data)
@@ -627,8 +634,8 @@ describe('options and variants', () => {
     })
     const unauthenticated = await putOptions(id, '', colorAndSize)
 
-    expect(options.status).toBe(403)
-    expect(variants.status).toBe(403)
+    expect(options.status).toBe(401)
+    expect(variants.status).toBe(401)
     expect(unauthenticated.status).toBe(401)
     expect(await db.select().from(productOptions)).toHaveLength(0)
   })
@@ -636,7 +643,7 @@ describe('options and variants', () => {
 
 describe('specs and media', () => {
   it('returns spec names and units on the admin detail', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const data = await seed(admin)
     const id = await createProduct(admin, data)
 
@@ -667,7 +674,7 @@ describe('specs and media', () => {
   })
 
   it('rejects an unknown attribute and blocks deleting one in use', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const data = await seed(admin)
     const id = await createProduct(admin, data)
 
@@ -690,7 +697,7 @@ describe('specs and media', () => {
   })
 
   it('replaces the whole spec set', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const data = await seed(admin)
     const id = await createProduct(admin, data)
     await putSpecs(id, admin, {
@@ -711,11 +718,12 @@ describe('specs and media', () => {
   })
 
   it('attaches ready media and orders it by the submitted order', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const data = await seed(admin)
     const id = await createProduct(admin, data)
-    const first = await createReadyMedia(admin)
-    const second = await createReadyMedia(admin)
+    const uploader = await loginAs(UPLOADER)
+    const first = await createReadyMedia(uploader)
+    const second = await createReadyMedia(uploader)
 
     const attached = await putMedia(id, admin, { mediaIds: [first, second] })
     const reordered = await putMedia(id, admin, { mediaIds: [second, first] })
@@ -736,11 +744,12 @@ describe('specs and media', () => {
   })
 
   it('rejects media that is pending or missing and applies nothing', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const data = await seed(admin)
     const id = await createProduct(admin, data)
-    const ready = await createReadyMedia(admin)
-    const pending = await createPendingMedia(admin)
+    const uploader = await loginAs(UPLOADER)
+    const ready = await createReadyMedia(uploader)
+    const pending = await createPendingMedia(uploader)
 
     const notReady = await putMedia(id, admin, { mediaIds: [ready, pending] })
     const missing = await putMedia(id, admin, {
@@ -755,8 +764,8 @@ describe('specs and media', () => {
     expect(await db.select().from(productMedia)).toHaveLength(0)
   })
 
-  it('rejects a basic user on both replace routes', async () => {
-    const admin = await loginAs(ADMIN)
+  it('rejects a workshop session on both replace routes', async () => {
+    const admin = await loginAsAdmin(ADMIN)
     const basic = await loginAs(BASIC)
     const data = await seed(admin)
     const id = await createProduct(admin, data)
@@ -764,8 +773,8 @@ describe('specs and media', () => {
     const specs = await putSpecs(id, basic, { specs: [] })
     const attached = await putMedia(id, basic, { mediaIds: [] })
 
-    expect(specs.status).toBe(403)
-    expect(attached.status).toBe(403)
+    expect(specs.status).toBe(401)
+    expect(attached.status).toBe(401)
   })
 })
 
@@ -784,7 +793,7 @@ describe('publish and browse publicly', () => {
   }
 
   it('hides a draft from the public list and detail', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const data = await seed(admin)
     await showSupplier(data.supplierId)
     await createProduct(admin, data)
@@ -797,11 +806,11 @@ describe('publish and browse publicly', () => {
   })
 
   it('serves a published product to an anonymous caller', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const data = await seed(admin)
     await showSupplier(data.supplierId)
     const id = await createProduct(admin, data)
-    const mediaId = await createReadyMedia(admin)
+    const mediaId = await createReadyMedia(await loginAs(UPLOADER))
     await putVariants(id, admin, { variants: [{ price: 14.25, sku: 'WC' }] })
     await putSpecs(id, admin, {
       specs: [{ attributeId: data.material, value: 'Ceramic' }],
@@ -843,7 +852,7 @@ describe('publish and browse publicly', () => {
   })
 
   it('drops products of a hidden supplier from public responses', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const data = await seed(admin)
     await showSupplier(data.supplierId)
     await publishedProduct(admin, data)
@@ -859,7 +868,7 @@ describe('publish and browse publicly', () => {
   })
 
   it('retires a product to not_available and brings it back', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const data = await seed(admin)
     await showSupplier(data.supplierId)
     const id = await publishedProduct(admin, data)
@@ -879,7 +888,7 @@ describe('publish and browse publicly', () => {
   })
 
   it('never returns a retired product to draft', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const data = await seed(admin)
     const id = await publishedProduct(admin, data)
 
@@ -897,7 +906,7 @@ describe('publish and browse publicly', () => {
   })
 
   it('filters by category including descendants, supplier and specs', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const data = await seed(admin)
     await showSupplier(data.supplierId)
     await showSupplier(data.otherSupplierId)
@@ -955,7 +964,7 @@ describe('publish and browse publicly', () => {
   })
 
   it('caps the page size and serves the next slice', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const data = await seed(admin)
     await showSupplier(data.supplierId)
 
@@ -979,7 +988,7 @@ describe('publish and browse publicly', () => {
   })
 
   it('returns 404 for an unknown supplier or product slug', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const data = await seed(admin)
     await showSupplier(data.supplierId)
     await publishedProduct(admin, data)
@@ -991,16 +1000,16 @@ describe('publish and browse publicly', () => {
     expect(unknownProduct.status).toBe(404)
   })
 
-  it('rejects a basic user on publish', async () => {
-    const admin = await loginAs(ADMIN)
+  it('rejects a workshop session on publish', async () => {
+    const admin = await loginAsAdmin(ADMIN)
     const basic = await loginAs(BASIC)
     const data = await seed(admin)
     const id = await createProduct(admin, data)
 
-    const forbidden = await publishProduct(id, basic)
+    const workshop = await publishProduct(id, basic)
     const unauthenticated = await publishProduct(id, '')
 
-    expect(forbidden.status).toBe(403)
+    expect(workshop.status).toBe(401)
     expect(unauthenticated.status).toBe(401)
   })
 })
@@ -1026,7 +1035,7 @@ describe('product facets', () => {
   }
 
   it('aggregates spec values across published products of visible suppliers', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const data = await seed(admin)
     await showSupplier(data.supplierId)
 
@@ -1075,7 +1084,7 @@ describe('product facets', () => {
   })
 
   it('lists supplier counts and price bounds over published products', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const data = await seed(admin)
     await showSupplier(data.supplierId)
     await showSupplier(data.otherSupplierId)
@@ -1133,7 +1142,7 @@ describe('product facets', () => {
   }
 
   it('keeps sibling values visible when filtering by a spec', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     await scopedSeed(admin)
 
     const res = await facets('?spec.material=Wood')
@@ -1171,7 +1180,7 @@ describe('product facets', () => {
   })
 
   it('combines repeated values of one attribute with OR on the list', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     await scopedSeed(admin)
 
     const both = (await (
@@ -1190,7 +1199,7 @@ describe('product facets', () => {
   })
 
   it('scopes facets to the union of repeated values of one attribute', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     await scopedSeed(admin)
 
     const res = await facets('?spec.material=Wood&spec.material=Steel')
@@ -1228,7 +1237,7 @@ describe('product facets', () => {
   })
 
   it('keeps all suppliers listed when filtering by supplier', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     await scopedSeed(admin)
 
     const res = await facets('?supplier=kivu-tiles')
@@ -1266,7 +1275,7 @@ describe('product facets', () => {
   })
 
   it('scopes facets to the category subtree', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     await scopedSeed(admin)
 
     const subtree = await facets('?category=tiles')
@@ -1307,7 +1316,7 @@ describe('product facets', () => {
   })
 
   it('combines supplier and spec filters with each dimension excluding its own', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     await scopedSeed(admin)
 
     const res = await facets('?supplier=kivu-tiles&spec.material=Wood')
@@ -1345,7 +1354,7 @@ describe('product facets', () => {
   })
 
   it('returns empty facets for an unknown filter value', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     await scopedSeed(admin)
 
     const res = await facets('?category=no-such-category')
@@ -1359,7 +1368,7 @@ describe('product facets', () => {
   })
 
   it('orders values by count descending then alphabetically', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const data = await seed(admin)
     await showSupplier(data.supplierId)
 
@@ -1385,10 +1394,10 @@ describe('product facets', () => {
 
 describe('delete a product', () => {
   it('removes the product and everything it owns, keeping media', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const data = await seed(admin)
     const id = await createProduct(admin, data)
-    const mediaId = await createReadyMedia(admin)
+    const mediaId = await createReadyMedia(await loginAs(UPLOADER))
 
     const optionsRes = await putOptions(id, admin, {
       options: [{ name: 'Color', values: ['Red'] }],
@@ -1420,17 +1429,17 @@ describe('delete a product', () => {
     expect(fetched.status).toBe(200)
   })
 
-  it('returns 404 for an unknown product and 403 for a basic user', async () => {
-    const admin = await loginAs(ADMIN)
+  it('returns 404 for an unknown product and 401 for a workshop session', async () => {
+    const admin = await loginAsAdmin(ADMIN)
     const basic = await loginAs(BASIC)
     const data = await seed(admin)
     const id = await createProduct(admin, data)
 
     const unknown = await deleteProduct(crypto.randomUUID(), admin)
-    const forbidden = await deleteProduct(id, basic)
+    const workshop = await deleteProduct(id, basic)
 
     expect(unknown.status).toBe(404)
-    expect(forbidden.status).toBe(403)
+    expect(workshop.status).toBe(401)
     expect(await db.select().from(products)).toHaveLength(1)
   })
 })

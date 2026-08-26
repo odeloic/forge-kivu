@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-const emailSchema = z.string().trim().toLowerCase().pipe(z.email())
+export const emailSchema = z.string().trim().toLowerCase().pipe(z.email())
 const passwordSchema = z.string().min(8).max(200)
 
 export const signupSchema = z.object({

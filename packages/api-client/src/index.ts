@@ -11,6 +11,11 @@ export type SessionUser = InferResponseType<
   200
 >
 
+export type AdminUser = InferResponseType<
+  ApiClient['admin']['auth']['me']['$get'],
+  200
+>
+
 export const createClient = (
   baseUrl: string,
   options?: ClientOptions,
@@ -27,3 +32,15 @@ export type ProductFacets = InferResponseType<
   ApiClient['catalogue']['products']['facets']['$get'],
   200
 >
+
+export type AdminSupplier = InferResponseType<
+  ApiClient['admin']['suppliers']['$get'],
+  200
+>[number]
+
+export type AdminProductListItem = InferResponseType<
+  ApiClient['admin']['products']['$get'],
+  200
+>[number]
+
+export type Settings = InferResponseType<ApiClient['settings']['$get'], 200>

@@ -4,7 +4,12 @@ import { beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { app } from '../../app'
 import { db } from '../../db'
 import { env } from '../../env'
-import { jsonRequest, loginAs, resetDatabase } from '../../test/helpers'
+import {
+  jsonRequest,
+  loginAs,
+  loginAsAdmin,
+  resetDatabase,
+} from '../../test/helpers'
 import {
   createPendingMedia,
   createReadyMedia,
@@ -20,6 +25,8 @@ const ADMIN = {
 }
 
 const BASIC = { email: 'ada@example.com', password: 'correct horse' }
+
+const UPLOADER = { email: 'uploader@example.com', password: 'correct horse' }
 
 const createSupplier = (
   cookie: string,
@@ -74,7 +81,7 @@ beforeEach(async () => {
 
 describe('create a supplier', () => {
   it('lets an admin create a hidden supplier', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
 
     const res = await createSupplier(admin, {
       name: 'Kivu Coffee',
@@ -98,7 +105,7 @@ describe('create a supplier', () => {
   })
 
   it('rejects a slug that is already used', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     await createSupplier(admin)
 
     const res = await createSupplier(admin, {
@@ -112,7 +119,7 @@ describe('create a supplier', () => {
   })
 
   it('rejects an invalid slug', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
 
     const res = await createSupplier(admin, {
       name: 'Kivu Coffee',
@@ -124,8 +131,8 @@ describe('create a supplier', () => {
   })
 
   it('rejects a logo that is not ready', async () => {
-    const admin = await loginAs(ADMIN)
-    const pending = await createPendingMedia(admin)
+    const admin = await loginAsAdmin(ADMIN)
+    const pending = await createPendingMedia(await loginAs(UPLOADER))
 
     const res = await createSupplier(admin, {
       name: 'Kivu Coffee',
@@ -140,13 +147,13 @@ describe('create a supplier', () => {
     expect(await db.select().from(suppliers)).toHaveLength(0)
   })
 
-  it('rejects a basic user and an anonymous request', async () => {
+  it('rejects a workshop session and an anonymous request', async () => {
     const basic = await loginAs(BASIC)
 
-    const forbidden = await createSupplier(basic)
+    const workshop = await createSupplier(basic)
     const unauthenticated = await createSupplier('')
 
-    expect(forbidden.status).toBe(403)
+    expect(workshop.status).toBe(401)
     expect(unauthenticated.status).toBe(401)
     expect(await db.select().from(suppliers)).toHaveLength(0)
   })
@@ -154,7 +161,7 @@ describe('create a supplier', () => {
 
 describe('list suppliers as admin', () => {
   it('includes hidden suppliers', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     await createSupplier(admin)
 
     const res = await listAllSuppliers(admin)
@@ -165,15 +172,15 @@ describe('list suppliers as admin', () => {
     ])
   })
 
-  it('rejects a basic user and an anonymous request', async () => {
-    const admin = await loginAs(ADMIN)
+  it('rejects a workshop session and an anonymous request', async () => {
+    const admin = await loginAsAdmin(ADMIN)
     const basic = await loginAs(BASIC)
     await createSupplier(admin)
 
-    const forbidden = await listAllSuppliers(basic)
+    const workshop = await listAllSuppliers(basic)
     const unauthenticated = await listAllSuppliers()
 
-    expect(forbidden.status).toBe(403)
+    expect(workshop.status).toBe(401)
     expect(unauthenticated.status).toBe(401)
   })
 
@@ -181,18 +188,18 @@ describe('list suppliers as admin', () => {
     const basic = await loginAs(BASIC)
 
     const unauthenticated = await app.request('/admin/not-a-route')
-    const forbidden = await app.request('/admin/not-a-route', {
+    const workshop = await app.request('/admin/not-a-route', {
       headers: { cookie: basic },
     })
 
     expect(unauthenticated.status).toBe(401)
-    expect(forbidden.status).toBe(403)
+    expect(workshop.status).toBe(401)
   })
 })
 
 describe('public reads', () => {
   it('lists visible suppliers only', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     await createSupplier(admin)
     await createSupplier(admin, { name: 'Lake Tea', slug: 'lake-tea' })
     await show('lake-tea')
@@ -204,7 +211,7 @@ describe('public reads', () => {
   })
 
   it('returns 404 for a hidden supplier and the row once visible', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     await createSupplier(admin)
 
     const hidden = await getSupplier('kivu-coffee')
@@ -224,8 +231,8 @@ describe('public reads', () => {
   })
 
   it('serves a logo url that loads, and null without a logo', async () => {
-    const admin = await loginAs(ADMIN)
-    const mediaId = await createReadyMedia(admin)
+    const admin = await loginAsAdmin(ADMIN)
+    const mediaId = await createReadyMedia(await loginAs(UPLOADER))
 
     await createSupplier(admin, {
       name: 'Kivu Coffee',
@@ -253,7 +260,7 @@ describe('public reads', () => {
 
 describe('update a supplier', () => {
   it('toggles public visibility', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const id = await createdId(admin)
 
     const shown = await patchSupplier(id, admin, { visible: true })
@@ -269,7 +276,7 @@ describe('update a supplier', () => {
   })
 
   it('edits the name, slug and description', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const id = await createdId(admin)
 
     const res = await patchSupplier(id, admin, {
@@ -287,7 +294,7 @@ describe('update a supplier', () => {
   })
 
   it('rejects a slug that another supplier already uses', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const id = await createdId(admin)
     await createSupplier(admin, { name: 'Lake Tea', slug: 'lake-tea' })
 
@@ -298,9 +305,9 @@ describe('update a supplier', () => {
   })
 
   it('rejects a logo that is not ready', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const id = await createdId(admin)
-    const pending = await createPendingMedia(admin)
+    const pending = await createPendingMedia(await loginAs(UPLOADER))
 
     const res = await patchSupplier(id, admin, { logoMediaId: pending })
 
@@ -311,9 +318,9 @@ describe('update a supplier', () => {
   })
 
   it('accepts a ready logo', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const id = await createdId(admin)
-    const mediaId = await createReadyMedia(admin)
+    const mediaId = await createReadyMedia(await loginAs(UPLOADER))
 
     const res = await patchSupplier(id, admin, { logoMediaId: mediaId })
 
@@ -325,7 +332,7 @@ describe('update a supplier', () => {
   })
 
   it('rejects an empty patch and an unknown supplier', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const id = await createdId(admin)
 
     const empty = await patchSupplier(id, admin, {})
@@ -337,15 +344,15 @@ describe('update a supplier', () => {
     expect(unknown.status).toBe(404)
   })
 
-  it('rejects a basic user and an anonymous request', async () => {
-    const admin = await loginAs(ADMIN)
+  it('rejects a workshop session and an anonymous request', async () => {
+    const admin = await loginAsAdmin(ADMIN)
     const basic = await loginAs(BASIC)
     const id = await createdId(admin)
 
-    const forbidden = await patchSupplier(id, basic, { visible: true })
+    const workshop = await patchSupplier(id, basic, { visible: true })
     const unauthenticated = await patchSupplier(id, '', { visible: true })
 
-    expect(forbidden.status).toBe(403)
+    expect(workshop.status).toBe(401)
     expect(unauthenticated.status).toBe(401)
     expect((await db.select().from(suppliers))[0]).toMatchObject({
       visible: false,
@@ -355,7 +362,7 @@ describe('update a supplier', () => {
 
 describe('delete a supplier', () => {
   it('removes the row', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const id = await createdId(admin)
 
     const res = await deleteSupplier(id, admin)
@@ -365,22 +372,22 @@ describe('delete a supplier', () => {
   })
 
   it('returns 404 for an unknown supplier', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
 
     const res = await deleteSupplier(crypto.randomUUID(), admin)
 
     expect(res.status).toBe(404)
   })
 
-  it('rejects a basic user and an anonymous request', async () => {
-    const admin = await loginAs(ADMIN)
+  it('rejects a workshop session and an anonymous request', async () => {
+    const admin = await loginAsAdmin(ADMIN)
     const basic = await loginAs(BASIC)
     const id = await createdId(admin)
 
-    const forbidden = await deleteSupplier(id, basic)
+    const workshop = await deleteSupplier(id, basic)
     const unauthenticated = await deleteSupplier(id, '')
 
-    expect(forbidden.status).toBe(403)
+    expect(workshop.status).toBe(401)
     expect(unauthenticated.status).toBe(401)
     expect(await db.select().from(suppliers)).toHaveLength(1)
   })

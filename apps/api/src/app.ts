@@ -4,40 +4,19 @@ import { csrf } from 'hono/csrf'
 import { HTTPException } from 'hono/http-exception'
 import { requestId, type RequestIdVariables } from 'hono/request-id'
 
-import { makeErrorResponse, ROLES } from '@forge-kivu/types'
+import { makeErrorResponse } from '@forge-kivu/types'
 
 import { AppError } from './lib/errors'
 import { logger } from './lib/logger'
-import { auth } from './middleware/auth'
-import { requireRole } from './middleware/require-role'
+import { adminRoutes } from './modules/admin/admin.routes'
 import { authRoutes } from './modules/auth/auth.routes'
 import { boqRoutes } from './modules/boq/boq.routes'
-import {
-  adminCatalogueRoutes,
-  catalogueRoutes,
-} from './modules/catalogue/catalogue.routes'
-import { adminMediaRoutes, mediaRoutes } from './modules/media/media.routes'
+import { catalogueRoutes } from './modules/catalogue/catalogue.routes'
+import { mediaRoutes } from './modules/media/media.routes'
 import { projectRoutes } from './modules/projects/projects.routes'
-import {
-  adminSettingsRoutes,
-  settingsRoutes,
-} from './modules/settings/settings.routes'
-import {
-  adminSupplierRoutes,
-  supplierRoutes,
-} from './modules/suppliers/suppliers.routes'
-import {
-  adminTaxonomyRoutes,
-  taxonomyRoutes,
-} from './modules/taxonomy/taxonomy.routes'
-
-const adminRoutes = new Hono()
-  .use('*', auth, requireRole(ROLES.ADMIN))
-  .route('/media', adminMediaRoutes)
-  .route('/products', adminCatalogueRoutes)
-  .route('/settings', adminSettingsRoutes)
-  .route('/suppliers', adminSupplierRoutes)
-  .route('/', adminTaxonomyRoutes)
+import { settingsRoutes } from './modules/settings/settings.routes'
+import { supplierRoutes } from './modules/suppliers/suppliers.routes'
+import { taxonomyRoutes } from './modules/taxonomy/taxonomy.routes'
 
 export const app = new Hono<{ Variables: RequestIdVariables }>()
   .use(requestId())

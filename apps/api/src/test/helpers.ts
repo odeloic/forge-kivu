@@ -57,3 +57,22 @@ export const loginAs = async (user: TestUser): Promise<string> => {
 
   return sessionCookie(res)
 }
+
+export const loginAsAdmin = async (
+  user: Omit<TestUser, 'role'> = {
+    email: 'admin@example.com',
+    password: 'correct horse',
+  },
+): Promise<string> => {
+  await loginAs({ ...user, role: ROLES.ADMIN })
+
+  const res = await app.request(
+    '/admin/auth/login',
+    jsonRequest({ email: user.email, password: user.password }),
+  )
+  if (res.status !== 200) {
+    throw new Error(`admin login failed with status ${res.status}`)
+  }
+
+  return sessionCookie(res)
+}

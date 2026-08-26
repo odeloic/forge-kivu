@@ -4,7 +4,12 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import { app } from '../../app'
 import { db } from '../../db'
-import { jsonRequest, loginAs, resetDatabase } from '../../test/helpers'
+import {
+  jsonRequest,
+  loginAs,
+  loginAsAdmin,
+  resetDatabase,
+} from '../../test/helpers'
 import { ROLES } from '@forge-kivu/types'
 import { productVariants } from '../catalogue/catalogue.tables'
 import { boqItems } from './boq.tables'
@@ -160,7 +165,7 @@ type Fixture = {
 }
 
 const projectWithItem = async (): Promise<Fixture> => {
-  const admin = await loginAs(ADMIN)
+  const admin = await loginAsAdmin(ADMIN)
   const { productId, variantId } = await seededProduct(admin, 'cement-tile')
   const owner = await loginAs(OWNER)
   const projectId = await createProject(owner)
@@ -241,7 +246,7 @@ describe('generate a boq', () => {
   })
 
   it('returns 422 for an unpriced variant', async () => {
-    const admin = await loginAs(ADMIN)
+    const admin = await loginAsAdmin(ADMIN)
     const { variantId } = await seededProduct(admin, 'bare-tile', null)
     const owner = await loginAs(OWNER)
     const projectId = await createProject(owner)
