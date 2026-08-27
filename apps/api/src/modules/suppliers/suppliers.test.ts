@@ -71,6 +71,26 @@ const createdId = async (cookie: string, body?: unknown): Promise<string> => {
 const show = (slug: string) =>
   db.update(suppliers).set({ visible: true }).where(eq(suppliers.slug, slug))
 
+const createCategory = async (cookie: string): Promise<string> => {
+  const res = await app.request(
+    '/admin/categories',
+    jsonRequest({ name: 'Tiles', slug: 'tiles' }, cookie),
+  )
+  const json = (await res.json()) as { id: string }
+  return json.id
+}
+
+const createProduct = (
+  cookie: string,
+  supplierId: string,
+  categoryId: string,
+  slug: string,
+) =>
+  app.request(
+    '/admin/products',
+    jsonRequest({ supplierId, categoryId, name: slug, slug }, cookie),
+  )
+
 beforeAll(async () => {
   await ensurePublicBucket()
 })
@@ -169,6 +189,25 @@ describe('list suppliers as admin', () => {
     expect(res.status).toBe(200)
     expect(await res.json()).toMatchObject([
       { slug: 'kivu-coffee', visible: false },
+    ])
+  })
+
+  it('counts each supplier products', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const kivu = await createdId(admin)
+    const lake = await createdId(admin, {
+      name: 'Lake Stone',
+      slug: 'lake-stone',
+    })
+    const categoryId = await createCategory(admin)
+    await createProduct(admin, kivu, categoryId, 'white-tile')
+    await createProduct(admin, kivu, categoryId, 'grey-tile')
+
+    const res = await listAllSuppliers(admin)
+
+    expect(await res.json()).toMatchObject([
+      { id: kivu, productCount: 2 },
+      { id: lake, productCount: 0 },
     ])
   })
 

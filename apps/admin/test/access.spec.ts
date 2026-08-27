@@ -1,11 +1,14 @@
 import { globSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import { describe, expect, it } from 'vitest'
 
 import { ACCESS, type Access } from '@forge-kivu/nuxt-base/app/utils/access'
 
-const pagesDirectory = resolve(process.cwd(), 'apps/web/app/pages')
+const pagesDirectory = resolve(
+  fileURLToPath(new URL('../app/pages', import.meta.url)),
+)
 
 describe('page access declarations', () => {
   it('requires every page to declare a valid access policy', () => {

@@ -43,29 +43,29 @@ const statusFallbacks: Record<number, ErrorCode> = {
   404: 'NOT_FOUND',
 }
 
-export class WebError extends Error {
+export class ApiError extends Error {
   constructor(readonly code: ErrorCode) {
     super(code)
-    this.name = 'WebError'
+    this.name = 'ApiError'
   }
 }
 
-export const toWebError = async (res: Response): Promise<WebError> => {
+export const toApiError = async (res: Response): Promise<ApiError> => {
   const body: unknown = await res.json().catch(() => null)
   const parsed = errorResponseSchema.safeParse(body)
   const code = parsed.success
     ? parsed.data.error.code
     : statusFallbacks[res.status]
-  return new WebError(code ?? 'INTERNAL')
+  return new ApiError(code ?? 'INTERNAL')
 }
 
-export const toWebErrorCode = (cause: unknown): ErrorCode =>
-  cause instanceof WebError ? cause.code : 'INTERNAL'
+export const toErrorCode = (cause: unknown): ErrorCode =>
+  cause instanceof ApiError ? cause.code : 'INTERNAL'
 
-export const createWebError = (code: ErrorCode): NuxtError =>
+export const toNuxtError = (code: ErrorCode): NuxtError =>
   createError({ statusCode: errorCodes[code], data: { code } })
 
-export const nuxtWebErrorCode = (error: NuxtError): ErrorCode => {
+export const fromNuxtError = (error: NuxtError): ErrorCode => {
   const code = (error.data as { code?: unknown } | undefined)?.code
   if (typeof code === 'string' && code in messages) return code as ErrorCode
   return statusFallbacks[error.statusCode ?? 0] ?? 'INTERNAL'

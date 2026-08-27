@@ -6,8 +6,6 @@ export default defineNuxtRouteMiddleware((to) => {
 
   if (access === ACCESS.GUEST) return navigateTo('/')
 
-  if (access === DENIED_ACCESS) throw toNuxtError('FORBIDDEN')
-
   if (!user.value) {
     return navigateTo({ path: '/login', query: { redirect: to.fullPath } })
   }

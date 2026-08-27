@@ -4,6 +4,7 @@ packages:
 
 allowBuilds:
   esbuild: true
+  vue-demi: true
 
 catalog:
   '@aws-sdk/client-s3': 3.1106.0

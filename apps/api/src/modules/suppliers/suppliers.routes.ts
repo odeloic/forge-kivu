@@ -2,6 +2,7 @@ import { zValidator } from '@hono/zod-validator'
 import { Hono } from 'hono'
 
 import { AppError } from '../../lib/errors'
+import { countBySupplier } from '../catalogue/catalogue.service'
 import {
   createSupplierSchema,
   supplierIdParamSchema,
@@ -25,7 +26,13 @@ export const supplierRoutes = new Hono()
   })
 
 export const adminSupplierRoutes = new Hono()
-  .get('/', async (c) => c.json(await listAll()))
+  .get('/', async (c) => {
+    const [rows, counts] = await Promise.all([listAll(), countBySupplier()])
+
+    return c.json(
+      rows.map((row) => ({ ...row, productCount: counts.get(row.id) ?? 0 })),
+    )
+  })
   .post('/', zValidator('json', createSupplierSchema), async (c) =>
     c.json(await create(c.req.valid('json')), 201),
   )

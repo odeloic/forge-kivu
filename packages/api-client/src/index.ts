@@ -34,6 +34,11 @@ export type ProductFacets = InferResponseType<
 >
 
 export type AdminSupplier = InferResponseType<
+  ApiClient['admin']['suppliers'][':id']['$patch'],
+  200
+>
+
+export type AdminSupplierListItem = InferResponseType<
   ApiClient['admin']['suppliers']['$get'],
   200
 >[number]

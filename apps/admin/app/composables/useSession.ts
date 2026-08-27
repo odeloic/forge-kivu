@@ -7,35 +7,27 @@ export const useSession = () => {
   const user = useSessionState()
 
   const refresh = async () => {
-    const res = await api.auth.me.$get()
+    const res = await api.admin.auth.me.$get()
     user.value = res.ok ? await res.json() : null
   }
 
   const login = async (email: string, password: string) => {
-    const res = await api.auth.login.$post({ json: { email, password } })
-    if (!res.ok) throw await toApiError(res)
-    await refresh()
-  }
-
-  const signup = async (email: string, password: string) => {
-    const res = await api.auth.signup.$post({ json: { email, password } })
+    const res = await api.admin.auth.login.$post({ json: { email, password } })
     if (!res.ok) throw await toApiError(res)
     await refresh()
   }
 
   const logout = async () => {
-    await api.auth.logout.$post({}, jsonHeaders)
-    await navigateTo('/')
+    await api.admin.auth.logout.$post({}, jsonHeaders)
     user.value = null
+    await navigateTo('/login')
   }
 
   return {
     user,
-    isAuthenticated: computed(() => Boolean(user.value)),
     isAdmin: computed(() => user.value?.role === ROLES.ADMIN),
     refresh,
     login,
-    signup,
     logout,
   }
 }

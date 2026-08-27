@@ -784,6 +784,15 @@ export const listForAdmin = async (
   return buildListItems(rows, supplierById, categoryById)
 }
 
+export const countBySupplier = async (): Promise<Map<string, number>> => {
+  const rows = await db
+    .select({ supplierId: products.supplierId, total: count() })
+    .from(products)
+    .groupBy(products.supplierId)
+
+  return new Map(rows.map((row) => [row.supplierId, row.total]))
+}
+
 const emptyPage = (page: number): ProductPage => ({
   items: [],
   page,

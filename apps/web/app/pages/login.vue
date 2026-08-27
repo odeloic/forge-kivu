@@ -15,7 +15,7 @@ const submit = async () => {
     const redirect = route.query.redirect
     await navigateTo(typeof redirect === 'string' ? redirect : '/')
   } catch (cause) {
-    error.value = toWebErrorCode(cause)
+    error.value = toErrorCode(cause)
   }
 }
 </script>

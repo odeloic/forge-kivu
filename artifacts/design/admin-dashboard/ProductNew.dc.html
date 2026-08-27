@@ -1,0 +1,147 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&amp;family=IBM+Plex+Sans:wght@400;450;500;600&amp;display=swap">
+  <style>
+    body {
+      margin: 0;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
+      font-size: 13px;
+      line-height: 1.5;
+      color: #111111;
+      background: #ffffff;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: #3a577c; text-decoration: underline; text-underline-offset: 2px; }
+    a:hover { color: #223e61; text-decoration-thickness: 2px; }
+    h1 { margin: 0; font-size: 19px; font-weight: 500; letter-spacing: -0.01em; }
+    h2 { margin: 0; font-size: 14px; font-weight: 600; }
+    p { margin: 0; }
+    code { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 11px; color: #6f6f6d; }
+    table { border-collapse: collapse; width: 100%; table-layout: fixed; }
+    th {
+      text-align: left;
+      font-size: 10px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: #6f6f6d;
+      padding: 0 12px 7px;
+      border-bottom: 1px solid #111111;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    td { padding: 9px 12px; border-bottom: 1px solid #e4e4e1; vertical-align: middle; overflow: hidden; }
+    th:first-child, td:first-child { padding-left: 0; }
+    th:last-child, td:last-child { padding-right: 0; }
+    .cell { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+    fieldset { border: 1px solid #e4e4e1; border-radius: 0; margin: 0; padding: 16px 18px 18px; }
+    legend { padding: 0 6px; font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.07em; color: #6f6f6d; }
+    label { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; color: #6f6f6d; }
+    input, select, textarea {
+      font-family: inherit;
+      font-size: 13px;
+      color: #111111;
+      padding: 6px 8px;
+      border: 1px solid #cfcfcc;
+      border-radius: 0;
+      background: #ffffff;
+    }
+    input:focus, select:focus, textarea:focus { outline: 1px solid #3a577c; outline-offset: 1px; border-color: #3a577c; }
+    input:disabled { background: #f3f3f1; color: #9a9a97; }
+    button {
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 1.4;
+      padding: 6px 12px;
+      border: 1px solid transparent;
+      border-radius: 0;
+      background: transparent;
+      color: #111111;
+      cursor: pointer;
+    }
+    button:focus-visible { outline: 2px solid #3a577c; outline-offset: 1px; }
+    .btn-primary { background: #111111; border-color: #111111; color: #ffffff; }
+    .btn-primary:hover { background: #000000; border-color: #000000; }
+    .btn-secondary { background: #ffffff; border-color: #c9c9c5; }
+    .btn-secondary:hover { background: #f3f3f1; border-color: #111111; }
+    .btn-ghost { padding: 6px 8px; color: #3a577c; }
+    .btn-ghost:hover { background: #f3f3f1; color: #223e61; }
+    .s-ok { color: #3f6948; }
+    .s-neutral { color: #6f6f6d; }
+    .s-warn { color: #75582e; }
+    .s-bad { color: #814e49; }
+    .eyebrow { font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.09em; color: #9a9a97; }
+    .muted { color: #6f6f6d; }
+    .note { border: 1px solid #111111; padding: 9px 12px; font-size: 12px; }
+    .thumb { border: 1px dashed #cfcfcc; display: flex; align-items: center; justify-content: center; font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 10px; color: #9a9a97; }
+  </style>
+</helmet>
+<div style="display: flex; flex-direction: column; min-height: 100vh">
+
+  <header style="display: flex; align-items: center; gap: 16px; padding: 13px 24px; border-bottom: 1px solid #111111">
+    <span style="font-size: 14px; font-weight: 600; letter-spacing: 0.01em">Forge Kivu Admin</span>
+    <div style="flex-grow: 1"></div>
+    <span class="muted" style="font-size: 12px">admin@kigalibuildsupply.rw</span>
+    <button type="button" class="btn-secondary">Log out</button>
+  </header>
+
+  <main style="padding: 22px 26px 34px; display: flex; flex-direction: column; gap: 18px; max-width: 720px">
+
+    <p style="font-size: 12px"><a href="#">Products</a> <span class="muted">/ New product</span></p>
+
+    <h1>New product</h1>
+
+    <p class="muted" style="font-size: 12px">Everything here is required except the description. The product is created as a draft; options, variants, specs and media come next on its own page.</p>
+
+    <fieldset style="display: flex; flex-direction: column; gap: 14px">
+      <legend>Details</legend>
+      <div style="display: flex; gap: 14px">
+        <label style="flex-grow: 1; display: flex; flex-direction: column; gap: 5px">Supplier
+          <select><option>Select a supplier</option><option>Kigali Build Supply</option><option>Kivu Home &amp; Interiors</option></select>
+        </label>
+        <label style="flex-grow: 1; display: flex; flex-direction: column; gap: 5px">Category
+          <select><option>Select a category</option><option>Structural &amp; Building Materials › Cement</option><option>Roofing &amp; Exterior › Roofing Sheets</option></select>
+        </label>
+      </div>
+      <div style="display: flex; gap: 14px">
+        <label style="flex-grow: 1; display: flex; flex-direction: column; gap: 5px">Name
+          <input type="text" placeholder="Corrugated Roofing Sheet">
+        </label>
+        <label style="flex-grow: 1; display: flex; flex-direction: column; gap: 5px">Slug
+          <input type="text" placeholder="corrugated-roofing-sheet">
+        </label>
+      </div>
+      <label style="display: flex; flex-direction: column; gap: 5px">Description
+        <textarea rows="3" placeholder="Optional"></textarea>
+      </label>
+    </fieldset>
+
+    <div style="display: flex; align-items: center; gap: 10px">
+      <button type="button" class="btn-primary">Create product</button>
+      <button type="button" class="btn-secondary">Cancel</button>
+      <sc-if value="{{ showEndpoints }}" hint-placeholder-val="{{ true }}">
+        <code>POST /admin/products → 201, status draft → /products/:id</code>
+      </sc-if>
+    </div>
+
+  </main>
+</div>
+</x-dc>
+<script data-dc-script data-props='{"showEndpoints":{"editor":"boolean","default":false,"section":"Review"},"$preview":{"width":720,"height":620}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { showEndpoints: this.props.showEndpoints ?? true }
+  }
+}
+</script>
+</body>
+</html>

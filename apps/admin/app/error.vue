@@ -7,9 +7,9 @@ const message = computed(() => errorMessage(fromNuxtError(props.error)))
 </script>
 
 <template>
-  <div>
+  <main>
     <h1>{{ error.statusCode }}</h1>
     <p>{{ message }}</p>
     <button type="button" @click="clearError({ redirect: '/' })">Home</button>
-  </div>
+  </main>
 </template>
