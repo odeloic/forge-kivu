@@ -33,6 +33,14 @@ export type ProductFacets = InferResponseType<
   200
 >
 
+export type ProductDetail = InferResponseType<
+  ApiClient['catalogue']['products'][':supplierSlug'][':productSlug']['$get'],
+  200
+>
+
+export type ProductOption = ProductDetail['options'][number]
+export type ProductVariant = ProductDetail['variants'][number]
+
 export type AdminSupplier = InferResponseType<
   ApiClient['admin']['suppliers'][':id']['$patch'],
   200

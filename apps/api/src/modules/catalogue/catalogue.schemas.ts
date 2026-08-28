@@ -115,19 +115,29 @@ export const adminListQuerySchema = z.object({
     .optional(),
 })
 
+const priceQuerySchema = z
+  .string()
+  .regex(/^\d{1,12}$/)
+  .transform(Number)
+  .optional()
+
 export const publicListQuerySchema = z
   .looseObject({
     category: slugSchema.optional(),
     supplier: slugSchema.optional(),
+    priceMin: priceQuerySchema,
+    priceMax: priceQuerySchema,
     page: z
       .string()
       .regex(/^[1-9]\d{0,3}$/)
       .transform(Number)
       .optional(),
   })
-  .transform(({ category, supplier, page, ...rest }) => ({
+  .transform(({ category, supplier, priceMin, priceMax, page, ...rest }) => ({
     category,
     supplier,
+    priceMin,
+    priceMax,
     page,
     specs: Object.entries(rest).flatMap(([key, value]) => {
       if (!key.startsWith(SPEC_QUERY_PREFIX)) return []

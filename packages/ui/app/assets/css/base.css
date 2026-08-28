@@ -103,6 +103,17 @@ label {
   text-transform: uppercase;
 }
 
+.choice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  color: var(--color-ink);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-regular);
+  letter-spacing: normal;
+  text-transform: none;
+}
+
 input,
 select,
 textarea {

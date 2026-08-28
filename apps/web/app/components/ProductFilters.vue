@@ -1,177 +1,271 @@
 <script setup lang="ts">
-import type { ProductFacets } from '@forge-kivu/api-client'
-
-type AttributeFacet = ProductFacets['attributes'][number]
-
 const { data: facets } = await useProductFacets()
 
-const { supplier, specValues, toggleSupplier, toggleSpec } =
-  useCatalogueFilters()
+const {
+  category,
+  supplier,
+  price,
+  specValues,
+  isFiltered,
+  toggleCategory,
+  toggleSupplier,
+  setPrice,
+  clearAll,
+} = useCatalogueFilters()
 
-const COLOR_SLUGS = ['colour', 'color']
+const sections = computed(() => {
+  const attributes = facets.value?.attributes ?? []
+  const filtered = attributes
+    .map((attribute) => attribute.slug)
+    .filter((slug) => specValues(slug).length > 0)
+  return splitAttributes(attributes, filtered)
+})
 
-const COLOR_HEXES: Record<string, string> = {
-  Blue: '#1d4ed8',
-  White: '#ffffff',
-  Orange: '#f97316',
-  Pink: '#ec4899',
-  Red: '#dc2626',
-  Black: '#000000',
-  Yellow: '#facc15',
-  Grey: '#9ca3af',
-  Brown: '#7c3f00',
-  Beige: '#d6c3a1',
-  Green: '#16a34a',
-  Purple: '#7e22ce',
-}
+const bounds = computed(() => facets.value?.price ?? null)
 
-const sectionTitle = (attribute: AttributeFacet): string =>
-  attribute.unit ? `${attribute.name} (${attribute.unit})` : attribute.name
+const sliderValue = computed({
+  get: (): number[] => {
+    const range = bounds.value
+    if (!range) return []
+    return [price.value.min ?? range.min, price.value.max ?? range.max]
+  },
+  set: ([min, max]: number[]) => {
+    const range = bounds.value
+    if (!range || min === undefined || max === undefined) return
+    setPrice({ min, max }, range)
+  },
+})
+
+const step = computed(() => {
+  const range = bounds.value
+  if (!range) return 1
+  return Math.max(1, Math.round((range.max - range.min) / 100))
+})
+
+const moreOpen = ref(false)
 </script>
 
 <template>
   <aside class="filters">
-    <h2 class="title">Filter</h2>
+    <div class="masthead">
+      <h2>Filter</h2>
+      <UiButton v-if="isFiltered" variant="ghost" @click="clearAll">
+        Clear all
+      </UiButton>
+    </div>
 
-    <fieldset v-if="facets?.price" class="section">
-      <legend>Price</legend>
-      <div class="price-bounds">
-        <span>{{ formatRwf(facets.price.min) }}</span>
-        <span>{{ formatRwf(facets.price.max) }}</span>
-      </div>
-      <input type="range" :min="facets.price.min" :max="facets.price.max" />
+    <fieldset v-if="facets?.categories.length" class="section">
+      <legend>Category</legend>
+      <ToggleGroupRoot
+        :model-value="category ?? ''"
+        type="single"
+        class="options"
+        @update:model-value="toggleCategory(String($event))"
+      >
+        <ToggleGroupItem
+          v-for="row in facets.categories"
+          :key="row.slug"
+          :value="row.slug"
+          class="option"
+        >
+          <span class="option-label">{{ row.name }}</span>
+          <span class="count">{{ row.count }}</span>
+        </ToggleGroupItem>
+      </ToggleGroupRoot>
     </fieldset>
 
-    <fieldset class="section">
-      <legend>Availability</legend>
-      <label><input type="checkbox" /> In stock</label>
-      <label><input type="checkbox" /> By request</label>
-    </fieldset>
-
-    <fieldset v-if="facets && facets.suppliers.length > 0" class="section">
+    <fieldset v-if="facets?.suppliers.length" class="section">
       <legend>Brand</legend>
-      <ul class="brands">
-        <li v-for="brand in facets.suppliers" :key="brand.slug">
-          <button
-            type="button"
-            class="brand"
-            :class="{ active: supplier === brand.slug }"
-            @click="toggleSupplier(brand.slug)"
-          >
-            {{ brand.name }} ({{ brand.count }})
-          </button>
-        </li>
-      </ul>
+      <ToggleGroupRoot
+        :model-value="supplier ?? ''"
+        type="single"
+        class="options"
+        @update:model-value="toggleSupplier(String($event))"
+      >
+        <ToggleGroupItem
+          v-for="row in facets.suppliers"
+          :key="row.slug"
+          :value="row.slug"
+          class="option"
+        >
+          <span class="option-label">{{ row.name }}</span>
+          <span class="count">{{ row.count }}</span>
+        </ToggleGroupItem>
+      </ToggleGroupRoot>
     </fieldset>
 
-    <fieldset
-      v-for="attribute in facets?.attributes"
-      :key="attribute.slug"
-      class="section"
-    >
-      <legend>{{ sectionTitle(attribute) }}</legend>
-      <div class="grid-2">
-        <label v-for="value in attribute.values" :key="value.value">
-          <input
-            type="checkbox"
-            :checked="specValues(attribute.slug).includes(value.value)"
-            @change="toggleSpec(attribute.slug, value.value)"
-          />
-          <span
-            v-if="COLOR_SLUGS.includes(attribute.slug)"
-            class="swatch"
-            :style="{ background: COLOR_HEXES[value.value] }"
-          />
-          {{ value.value }} ({{ value.count }})
-        </label>
+    <fieldset v-if="bounds && bounds.max > bounds.min" class="section">
+      <legend>Price</legend>
+      <div class="bounds">
+        <span>{{ formatRwf(sliderValue[0] ?? bounds.min) }}</span>
+        <span>{{ formatRwf(sliderValue[1] ?? bounds.max) }}</span>
       </div>
+      <SliderRoot
+        v-model="sliderValue"
+        :min="bounds.min"
+        :max="bounds.max"
+        :step="step"
+        :min-steps-between-thumbs="1"
+        class="slider"
+      >
+        <SliderTrack class="track">
+          <SliderRange class="range" />
+        </SliderTrack>
+        <SliderThumb class="thumb" aria-label="Lowest price" />
+        <SliderThumb class="thumb" aria-label="Highest price" />
+      </SliderRoot>
     </fieldset>
+
+    <ProductFilterAttribute
+      v-for="attribute in sections.surfaced"
+      :key="attribute.slug"
+      :attribute="attribute"
+    />
+
+    <CollapsibleRoot v-if="sections.rest.length" v-model:open="moreOpen">
+      <CollapsibleTrigger as-child>
+        <UiButton variant="ghost" class="more">
+          {{
+            moreOpen
+              ? `Hide the other ${sections.rest.length} specification filters`
+              : `${sections.rest.length} more specification filters`
+          }}
+        </UiButton>
+      </CollapsibleTrigger>
+      <CollapsibleContent class="rest">
+        <ProductFilterAttribute
+          v-for="attribute in sections.rest"
+          :key="attribute.slug"
+          :attribute="attribute"
+        />
+      </CollapsibleContent>
+    </CollapsibleRoot>
   </aside>
 </template>
 
 <style scoped>
 .filters {
-  border-right: 2px solid #000;
-  padding: 1rem 1.25rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  padding: var(--space-10) var(--space-9) var(--space-12);
+  border-right: var(--border-hairline) solid var(--color-rule);
 }
 
-.title {
-  margin: 0 0 1rem;
-  font-size: 1.5rem;
+.masthead {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-6);
+}
+
+.masthead h2 {
+  flex-grow: 1;
 }
 
 .section {
-  border: none;
-  border-top: 1px solid #000;
-  margin: 0;
-  padding: 0.75rem 0 1.25rem;
+  padding: var(--space-7) 0 0;
+  border: 0;
+  border-top: var(--border-hairline) solid var(--color-rule);
 }
 
 .section legend {
-  float: right;
-  font-weight: 600;
-  padding: 0.25rem 0 0.5rem;
+  padding: 0;
 }
 
-.section legend + * {
-  clear: both;
+.options {
+  display: flex;
+  flex-direction: column;
+  padding-top: var(--space-2);
 }
 
-.section label {
+.option {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.2rem 0;
-  color: #666;
-}
-
-.price-bounds {
-  display: flex;
-  justify-content: space-between;
-  color: #666;
-}
-
-.section input[type='range'] {
-  width: 100%;
-}
-
-.grid-2 {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-}
-
-.swatch {
-  width: 1rem;
-  height: 1rem;
-  border: 1px solid #000;
-  flex-shrink: 0;
-}
-
-.brands {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1rem;
-}
-
-.brand {
-  border: none;
+  gap: var(--space-4);
+  padding: var(--space-2) 0;
+  border: 0;
   background: none;
-  padding: 0;
-  font: inherit;
-  text-transform: inherit;
-  letter-spacing: inherit;
-  color: #666;
+  color: var(--color-ink);
+  font-size: var(--text-sm);
+  text-align: left;
   cursor: pointer;
 }
 
-.brand.active {
-  color: #000;
-  font-weight: 600;
+.option:hover .option-label {
   text-decoration: underline;
+  text-underline-offset: 0.125rem;
+}
+
+.option[data-state='on'] {
+  font-weight: var(--weight-medium);
+}
+
+.option-label {
+  flex-grow: 1;
+}
+
+.count {
+  color: var(--color-faint);
+  font-size: var(--text-2xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.bounds {
+  display: flex;
+  justify-content: space-between;
+  padding: var(--space-4) 0 var(--space-5);
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.slider {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: var(--space-8);
+  touch-action: none;
+  user-select: none;
+}
+
+.track {
+  position: relative;
+  flex-grow: 1;
+  height: var(--border-hairline);
+  background: var(--color-field-border);
+}
+
+.range {
+  position: absolute;
+  height: 100%;
+  background: var(--color-ink);
+}
+
+.thumb {
+  display: block;
+  width: var(--space-6);
+  height: var(--space-6);
+  border: var(--border-hairline) solid var(--color-ink);
+  border-radius: 50%;
+  background: var(--color-paper);
+  cursor: grab;
+}
+
+.thumb:focus-visible {
+  outline: var(--focus-width-strong) solid var(--color-accent);
+  outline-offset: var(--focus-offset);
+}
+
+.more {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.rest {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  padding-top: var(--space-8);
 }
 </style>

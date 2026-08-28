@@ -5,7 +5,9 @@ import {
   desc,
   eq,
   exists,
+  gte,
   inArray,
+  lte,
   max,
   min,
   type SQL,
@@ -175,6 +177,16 @@ const collectCategories = (
   for (const node of nodes) {
     into.set(node.id, toRef(node))
     collectCategories(node.children, into)
+  }
+  return into
+}
+
+const rootByCategoryId = (nodes: CategoryNode[]): Map<string, ProductRef> => {
+  const into = new Map<string, ProductRef>()
+  for (const root of nodes) {
+    for (const id of collectCategories([root], new Map()).keys()) {
+      into.set(id, toRef(root))
+    }
   }
   return into
 }
@@ -806,7 +818,12 @@ type PublicScope = {
   attributeIdBySlug: Map<string, string>
 }
 
-type DimensionOmit = { supplier?: boolean; specSlug?: string }
+type DimensionOmit = {
+  supplier?: boolean
+  category?: boolean
+  price?: boolean
+  specSlug?: string
+}
 
 const publicConditions = (
   scope: PublicScope,
@@ -831,7 +848,28 @@ const publicConditions = (
   if (query.category) {
     const ids = subtreeIds(scope.tree, query.category)
     if (!ids) return null
-    conditions.push(inArray(products.categoryId, ids))
+    if (!omit.category) conditions.push(inArray(products.categoryId, ids))
+  }
+
+  const hasPriceFilter =
+    query.priceMin !== undefined || query.priceMax !== undefined
+
+  if (hasPriceFilter && !omit.price) {
+    const range: SQL[] = [eq(productVariants.productId, products.id)]
+    if (query.priceMin !== undefined) {
+      range.push(gte(productVariants.price, query.priceMin))
+    }
+    if (query.priceMax !== undefined) {
+      range.push(lte(productVariants.price, query.priceMax))
+    }
+    conditions.push(
+      exists(
+        db
+          .select({ matched: sql`1` })
+          .from(productVariants)
+          .where(and(...range)),
+      ),
+    )
   }
 
   for (const filter of query.specs) {
@@ -942,8 +980,15 @@ export type PriceBounds = {
   max: number
 }
 
+export type CategoryFacet = {
+  slug: string
+  name: string
+  count: number
+}
+
 export type ProductFacets = {
   price: PriceBounds | null
+  categories: CategoryFacet[]
   suppliers: SupplierFacet[]
   attributes: AttributeFacet[]
 }
@@ -978,8 +1023,10 @@ export const getFacets = async (
 
   const allConditions = publicConditions(scope, query)
   const supplierConditions = publicConditions(scope, query, { supplier: true })
+  const categoryConditions = publicConditions(scope, query, { category: true })
+  const priceConditions = publicConditions(scope, query, { price: true })
 
-  const [sharedSpecRows, ownSpecRows, supplierRows, priceRows] =
+  const [sharedSpecRows, ownSpecRows, supplierRows, categoryRows, priceRows] =
     await Promise.all([
       allConditions ? specFacetRows(allConditions) : [],
       Promise.all(
@@ -1003,7 +1050,14 @@ export const getFacets = async (
             .where(and(...supplierConditions))
             .groupBy(products.supplierId)
         : [],
-      allConditions
+      categoryConditions
+        ? db
+            .select({ categoryId: products.categoryId, count: count() })
+            .from(products)
+            .where(and(...categoryConditions))
+            .groupBy(products.categoryId)
+        : [],
+      priceConditions
         ? db
             .select({
               min: min(productVariants.price),
@@ -1011,7 +1065,7 @@ export const getFacets = async (
             })
             .from(productVariants)
             .innerJoin(products, eq(products.id, productVariants.productId))
-            .where(and(...allConditions))
+            .where(and(...priceConditions))
         : [],
     ])
 
@@ -1020,6 +1074,20 @@ export const getFacets = async (
     bounds && bounds.min !== null && bounds.max !== null
       ? { min: bounds.min, max: bounds.max }
       : null
+
+  const rootById = rootByCategoryId(tree)
+  const countByRootId = new Map<string, number>()
+  for (const row of categoryRows) {
+    const root = rootById.get(row.categoryId)
+    if (!root) continue
+    countByRootId.set(root.id, (countByRootId.get(root.id) ?? 0) + row.count)
+  }
+
+  const categories = tree.flatMap((root) => {
+    const total = countByRootId.get(root.id) ?? 0
+    if (total === 0) return []
+    return [{ slug: root.slug, name: root.name, count: total }]
+  })
 
   const suppliers = supplierRows
     .flatMap((row) => {
@@ -1060,5 +1128,5 @@ export const getFacets = async (
     )
   }
 
-  return { price, suppliers, attributes }
+  return { price, categories, suppliers, attributes }
 }

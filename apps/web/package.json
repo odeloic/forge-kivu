@@ -14,6 +14,7 @@
     "@forge-kivu/api-client": "workspace:*",
     "@forge-kivu/nuxt-base": "workspace:*",
     "@forge-kivu/types": "workspace:*",
+    "@forge-kivu/ui": "workspace:*",
     "nuxt": "4.5.2",
     "vue": "3.5.40",
     "vue-router": "5.2.0",

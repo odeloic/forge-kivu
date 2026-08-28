@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import type { ProductListItem } from '@forge-kivu/api-client'
 
-const props = defineProps<{ product: ProductListItem }>()
+interface Props {
+  product: ProductListItem
+}
+
+const props = defineProps<Props>()
 
 defineEmits<{ add: [] }>()
 
@@ -11,34 +15,47 @@ const detailPath = computed(
 
 const price = computed(() =>
   props.product.priceFrom === null
-    ? 'Price on request'
+    ? 'On request'
     : formatRwf(props.product.priceFrom),
 )
 </script>
 
 <template>
   <article class="card">
-    <header class="card-header">
-      <span class="supplier">{{ product.supplier.name }}</span>
-      <button
-        type="button"
+    <header class="head">
+      <span class="eyebrow">{{ product.supplier.name }}</span>
+      <UiButton
+        variant="ghost"
         class="add"
-        :aria-label="`Add ${product.name}`"
+        :aria-label="`Add ${product.name} to a project`"
         @click="$emit('add')"
       >
-        +
-      </button>
+        <svg
+          width="13"
+          height="13"
+          viewBox="0 0 13 13"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.3"
+          stroke-linecap="round"
+          aria-hidden="true"
+        >
+          <path d="M6.5 1.5 V11.5 M1.5 6.5 H11.5" />
+        </svg>
+      </UiButton>
     </header>
-    <NuxtLink :to="detailPath" class="figure">
+
+    <NuxtLink :to="detailPath" class="figure" tabindex="-1" aria-hidden="true">
       <img
         v-if="product.imageUrl"
         :src="product.imageUrl"
         :alt="product.name"
         loading="lazy"
       />
-      <span v-else class="no-image">No image</span>
+      <span v-else class="eyebrow">No image</span>
     </NuxtLink>
-    <footer class="card-footer">
+
+    <footer class="foot">
       <NuxtLink :to="detailPath" class="name">{{ product.name }}</NuxtLink>
       <span class="price">{{ price }}</span>
     </footer>
@@ -49,74 +66,66 @@ const price = computed(() =>
 .card {
   display: flex;
   flex-direction: column;
-  border: 1px solid #000;
-  background: #fff;
+  border: var(--border-hairline) solid var(--color-rule);
+  background: var(--color-paper);
 }
 
-.card-header {
+.card:hover {
+  border-color: var(--color-rule-strong);
+}
+
+.head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.75rem 1rem;
-}
-
-.supplier {
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-5);
 }
 
 .add {
-  border: none;
-  background: none;
-  font-size: 1.75rem;
-  line-height: 1;
-  cursor: pointer;
-  padding: 0;
+  padding: var(--space-2);
+  color: var(--color-muted);
 }
 
 .figure {
-  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0.5rem 1.5rem 1.5rem;
-  min-height: 12rem;
+  flex-grow: 1;
+  min-height: 9.25rem;
+  padding: var(--space-4) var(--space-8) var(--space-8);
 }
 
 .figure img {
   max-width: 100%;
-  max-height: 14rem;
+  max-height: 11rem;
   object-fit: contain;
 }
 
-.no-image {
-  color: #999;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.card-footer {
+.foot {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  border-top: 1px solid #000;
-}
-
-.name,
-.price {
-  padding: 0.6rem 1rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  grid-template-columns: 1fr auto;
+  border-top: var(--border-hairline) solid var(--color-rule);
 }
 
 .name {
-  color: inherit;
+  padding: var(--space-4) var(--space-5);
+  color: var(--color-ink);
+  font-size: var(--text-sm);
   text-decoration: none;
 }
 
+.name:hover {
+  text-decoration: underline;
+  text-underline-offset: 0.125rem;
+}
+
 .price {
-  border-left: 1px solid #000;
-  font-weight: 700;
-  text-align: center;
+  padding: var(--space-4) var(--space-5);
+  border-left: var(--border-hairline) solid var(--color-rule);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 </style>

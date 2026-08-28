@@ -5,12 +5,20 @@ Nuxt 4 routing, navigation and access control for `apps/web`. Tracks ODE-370
 
 ## Scope
 
-Routes, navigation and access control only. No styling, no design system, no
-component library. Markup is whatever is minimally sufficient to prove the wiring.
+Routes, navigation and access control only. ~~No styling, no design system, no
+component library. Markup is whatever is minimally sufficient to prove the wiring.~~
+Styling now comes from the `@forge-kivu/ui` layer and reka-ui primitives; see
+`artifacts/design-system-spec.md`. This spec still owns only routes, navigation
+and access.
 
-Catalogue and product URL semantics are deliberately unsettled — there is no
+~~Catalogue and product URL semantics are deliberately unsettled — there is no
 catalogue yet, and the shape will move. Those pages exist as empty stubs at the
-paths ODE-372 lists so the tree is walkable; nothing is built on top of them.
+paths ODE-372 lists so the tree is walkable; nothing is built on top of them.~~
+The catalogue is settled at `/` with filters in the query string, and product
+detail at `/products/:supplierSlug/:productSlug`. The remaining pages are still
+stubs. One open question: the catalogue lives at `/` while `/products` is an
+empty stub that `PRIMARY_NAV` still links — either the catalogue moves to
+`/products`, or `Products` comes out of the nav.
 
 ## Decisions
 
@@ -77,7 +85,7 @@ public   /                                    landing
          /login                               access: 'guest'
          /contact
          /products                            stub
-         /products/:supplierSlug/:productSlug  stub
+         /products/:supplierSlug/:productSlug  ~~stub~~ product detail
          /catalogue/categories/:slug          stub
          /suppliers                           stub
          /suppliers/:slug                     stub
@@ -94,7 +102,21 @@ authenticated /workshop
 admin-only    /admin                         dashboard
 ```
 
-Only five pages call the API. The rest are a heading and nothing else.
+~~Only five pages call the API.~~ Seven pages call the API: `/` reads
+`GET /catalogue/products` and `GET /catalogue/products/facets`, and
+`/products/:supplierSlug/:productSlug` reads
+`GET /catalogue/products/:supplierSlug/:productSlug`. The rest are a heading and
+nothing else.
+
+Two gaps the product detail page ships around:
+
+- The breadcrumb shows the leaf category only. `getPublished` returns
+  `category` as a single ref with no ancestors, so the trail cannot be built
+  from the response. Either the detail response carries the ancestor path, or
+  the page fetches the tree.
+- **Add to project** is disabled-by-selection but wired to nothing, and the `+`
+  on a product card still emits `add` with no listener. Neither has an endpoint.
+  Decide what they add to — a BOQ, a draft project — or take both out.
 
 | Page | Endpoint | Proves |
 | --- | --- | --- |

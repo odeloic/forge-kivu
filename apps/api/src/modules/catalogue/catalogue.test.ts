@@ -805,6 +805,62 @@ describe('publish and browse publicly', () => {
     expect(detail.status).toBe(404)
   })
 
+  it('filters the public list by a price range across variants', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const data = await seed(admin)
+    await showSupplier(data.supplierId)
+
+    const cheap = await createProduct(admin, data, { slug: 'cheap-tile' })
+    await putVariants(cheap, admin, { variants: [{ price: 10 }] })
+    await publishProduct(cheap, admin)
+
+    const spread = await createProduct(admin, data, { slug: 'spread-tile' })
+    const spreadOptions = await detailOf(
+      await putOptions(spread, admin, {
+        options: [{ name: 'Size', values: ['Small', 'Large'] }],
+      }),
+    )
+    const sizeId = (value: string): string => {
+      const found = spreadOptions.options[0]?.values.find(
+        (row) => row.value === value,
+      )
+      if (!found) throw new Error(`option value ${value} not found`)
+      return found.id
+    }
+    await putVariants(spread, admin, {
+      variants: [
+        { price: 5, optionValueIds: [sizeId('Small')] },
+        { price: 80, optionValueIds: [sizeId('Large')] },
+      ],
+    })
+    await publishProduct(spread, admin)
+
+    const dear = await createProduct(admin, data, { slug: 'dear-tile' })
+    await putVariants(dear, admin, { variants: [{ price: 200 }] })
+    await publishProduct(dear, admin)
+
+    const slugs = async (query: string) => {
+      const body = (await (await browse(query)).json()) as {
+        items: { slug: string }[]
+      }
+      return body.items.map((item) => item.slug).sort()
+    }
+
+    expect(await slugs('?priceMin=9&priceMax=100')).toEqual([
+      'cheap-tile',
+      'spread-tile',
+    ])
+    expect(await slugs('?priceMin=150')).toEqual(['dear-tile'])
+    expect(await slugs('?priceMax=6')).toEqual(['spread-tile'])
+    expect(await slugs('?priceMin=300')).toEqual([])
+  })
+
+  it('rejects a malformed price bound', async () => {
+    const res = await browse('?priceMin=cheap')
+
+    expect(res.status).toBe(400)
+  })
+
   it('serves a published product to an anonymous caller', async () => {
     const admin = await loginAsAdmin(ADMIN)
     const data = await seed(admin)
@@ -1065,6 +1121,7 @@ describe('product facets', () => {
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({
       price: null,
+      categories: [{ slug: 'tiles', name: 'Tiles', count: 2 }],
       suppliers: [{ slug: 'kivu-tiles', name: 'Kivu Tiles', count: 2 }],
       attributes: [
         {
@@ -1362,9 +1419,59 @@ describe('product facets', () => {
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({
       price: null,
+      categories: [],
       suppliers: [],
       attributes: [],
     })
+  })
+
+  it('rolls category counts up to the root and keeps siblings visible', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const data = await scopedSeed(admin)
+    const stone = await createdId(
+      await app.request(
+        '/admin/categories',
+        jsonRequest({ name: 'Stone', slug: 'stone' }, admin),
+      ),
+      'category create',
+    )
+    await publishedWithSpecs(admin, data, 'granite-slab', [], {
+      categoryId: stone,
+    })
+
+    const unfiltered = (await (await facets()).json()) as {
+      categories: { slug: string; name: string; count: number }[]
+    }
+
+    expect(unfiltered.categories).toEqual([
+      { slug: 'stone', name: 'Stone', count: 1 },
+      { slug: 'tiles', name: 'Tiles', count: 3 },
+    ])
+
+    const scoped = (await (await facets('?category=stone')).json()) as {
+      categories: { slug: string; count: number }[]
+      suppliers: { slug: string }[]
+    }
+
+    expect(scoped.categories).toEqual([
+      { slug: 'stone', name: 'Stone', count: 1 },
+      { slug: 'tiles', name: 'Tiles', count: 3 },
+    ])
+    expect(scoped.suppliers).toEqual([
+      { slug: 'kivu-tiles', name: 'Kivu Tiles', count: 1 },
+    ])
+  })
+
+  it('keeps price bounds unscoped by the price filter itself', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    await scopedSeed(admin)
+
+    const res = await facets('?priceMin=20&priceMax=40')
+    const body = (await res.json()) as {
+      price: { min: number; max: number } | null
+    }
+
+    expect(body.price).toEqual({ min: 10, max: 50 })
   })
 
   it('orders values by count descending then alphabetically', async () => {
