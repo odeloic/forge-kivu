@@ -26,6 +26,7 @@ const messages: Record<ErrorCode, string> = {
   VARIANT_INCOMPLETE: 'This variant is missing required options.',
   VARIANT_DUPLICATE: 'A variant with these options already exists.',
   PRODUCT_NOT_PUBLISHED: 'This product is not published.',
+  GALLERY_ORDER_MISMATCH: 'The gallery order does not match the current items.',
   BOQ_NOT_GENERATABLE: 'This bill of quantities cannot be generated yet.',
   EMAIL_TAKEN: 'Email already registered.',
   SLUG_TAKEN: 'That slug is already in use.',
@@ -34,6 +35,8 @@ const messages: Record<ErrorCode, string> = {
   CATEGORY_IN_USE: 'This category is still in use.',
   ATTRIBUTE_IN_USE: 'This attribute is still in use.',
   VARIANT_IN_USE: 'This variant is still in use.',
+  MEDIA_IN_USE: 'This media is still in use.',
+  GALLERY_MEDIA_DUPLICATE: 'This image is already in the gallery.',
   INTERNAL: 'Something went wrong.',
 }
 

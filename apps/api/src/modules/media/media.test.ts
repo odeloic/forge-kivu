@@ -9,7 +9,12 @@ import { s3 } from '../../storage'
 import { MAX_SIZE_BYTES } from './media.schemas'
 import { getPublicUrl, getReady } from './media.service'
 import { media, MEDIA_STATUSES } from './media.tables'
-import { loginAs, loginAsAdmin, resetDatabase } from '../../test/helpers'
+import {
+  jsonRequest,
+  loginAs,
+  loginAsAdmin,
+  resetDatabase,
+} from '../../test/helpers'
 import {
   confirmUpload as confirm,
   ensurePublicBucket,
@@ -271,5 +276,89 @@ describe('serve and delete', () => {
     expect(
       await db.select().from(media).where(eq(media.id, row.id)),
     ).toHaveLength(1)
+  })
+})
+
+describe('delete referenced media', () => {
+  const createReadyMedia = async (cookie: string) => {
+    const { json } = await requestUpload(cookie)
+    await uploadBytes(json.uploadUrl, 'image/png', PNG_BYTES)
+    await confirm(json.mediaId, cookie)
+    return onlyMediaRow()
+  }
+
+  const deleteMedia = (mediaId: string, cookie: string) =>
+    app.request(`/admin/media/${mediaId}`, {
+      method: 'DELETE',
+      headers: { cookie, 'content-type': 'application/json' },
+    })
+
+  const createSupplierWith = async (
+    admin: string,
+    body: Record<string, unknown>,
+  ): Promise<string> => {
+    const res = await app.request(
+      '/admin/suppliers',
+      jsonRequest(
+        { name: 'Kivu Coffee', slug: crypto.randomUUID(), ...body },
+        admin,
+      ),
+    )
+    const json = (await res.json()) as { id: string }
+    return json.id
+  }
+
+  it('rejects deleting media used as a supplier logo or featured image', async () => {
+    const user = await loginAs({
+      email: 'ada@example.com',
+      password: 'correct horse',
+    })
+    const admin = await loginAsAdmin()
+    const logo = await createReadyMedia(user)
+    const featured = await createReadyMedia(user)
+    await createSupplierWith(admin, { logoMediaId: logo.id })
+    await createSupplierWith(admin, { featuredMediaId: featured.id })
+
+    const logoRes = await deleteMedia(logo.id, admin)
+    const featuredRes = await deleteMedia(featured.id, admin)
+
+    expect(logoRes.status).toBe(409)
+    expect(await logoRes.json()).toMatchObject({
+      error: { code: 'MEDIA_IN_USE' },
+    })
+    expect(featuredRes.status).toBe(409)
+    expect(await db.select().from(media)).toHaveLength(2)
+  })
+
+  it('rejects deleting media used by a gallery item and allows it after removal', async () => {
+    const user = await loginAs({
+      email: 'ada@example.com',
+      password: 'correct horse',
+    })
+    const admin = await loginAsAdmin()
+    const row = await createReadyMedia(user)
+    const supplierId = await createSupplierWith(admin, {})
+    const created = await app.request(
+      `/admin/suppliers/${supplierId}/gallery`,
+      jsonRequest({ mediaId: row.id, altText: 'one' }, admin),
+    )
+    const item = (await created.json()) as { id: string }
+
+    const blocked = await deleteMedia(row.id, admin)
+
+    expect(blocked.status).toBe(409)
+    expect(await blocked.json()).toMatchObject({
+      error: { code: 'MEDIA_IN_USE' },
+    })
+
+    await app.request(`/admin/suppliers/${supplierId}/gallery/${item.id}`, {
+      method: 'DELETE',
+      headers: { cookie: admin, 'content-type': 'application/json' },
+    })
+
+    const allowed = await deleteMedia(row.id, admin)
+
+    expect(allowed.status).toBe(204)
+    expect(await db.select().from(media)).toHaveLength(0)
   })
 })

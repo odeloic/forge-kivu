@@ -1,6 +1,7 @@
 # Supplier Profile and Gallery Extension
 
-Status: agreed design; implementation has not started.
+Status: ~~agreed design; implementation has not started.~~
+Status: implemented (migration `0012_pale_retro_girl`, supplier profile fields, `supplier_gallery_items`, gallery admin endpoints, media-deletion restriction).
 
 ## Goal
 

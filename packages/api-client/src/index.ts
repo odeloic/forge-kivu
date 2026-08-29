@@ -51,6 +51,18 @@ export type AdminSupplierListItem = InferResponseType<
   200
 >[number]
 
+export type SupplierDetail = InferResponseType<
+  ApiClient['suppliers'][':slug']['$get'],
+  200
+>
+
+export type SupplierGalleryItem = SupplierDetail['gallery'][number]
+
+export type AdminSupplierDetail = InferResponseType<
+  ApiClient['admin']['suppliers'][':id']['$get'],
+  200
+>
+
 export type AdminProductListItem = InferResponseType<
   ApiClient['admin']['products']['$get'],
   200

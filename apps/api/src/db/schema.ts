@@ -31,6 +31,9 @@ export {
 
 export { platformSettings } from '../modules/settings/settings.tables'
 
-export { suppliers } from '../modules/suppliers/suppliers.tables'
+export {
+  supplierGalleryItems,
+  suppliers,
+} from '../modules/suppliers/suppliers.tables'
 
 export { categories, specAttributes } from '../modules/taxonomy/taxonomy.tables'

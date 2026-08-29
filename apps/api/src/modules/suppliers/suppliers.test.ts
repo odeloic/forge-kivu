@@ -16,7 +16,8 @@ import {
   ensurePublicBucket,
 } from '../../test/media'
 import { ROLES } from '@forge-kivu/types'
-import { suppliers } from './suppliers.tables'
+import { media } from '../media/media.tables'
+import { supplierGalleryItems, suppliers } from './suppliers.tables'
 
 const ADMIN = {
   email: 'admin@example.com',
@@ -58,6 +59,62 @@ const deleteSupplier = (id: string, cookie: string) =>
       ...(cookie ? { cookie } : {}),
     },
   })
+
+const getSupplierById = (id: string, cookie: string) =>
+  app.request(`/admin/suppliers/${id}`, { headers: { cookie } })
+
+const addGalleryItem = (id: string, cookie: string, body: unknown) =>
+  app.request(`/admin/suppliers/${id}/gallery`, jsonRequest(body, cookie))
+
+const patchGalleryItem = (
+  id: string,
+  itemId: string,
+  cookie: string,
+  body: unknown,
+) =>
+  app.request(`/admin/suppliers/${id}/gallery/${itemId}`, {
+    method: 'PATCH',
+    headers: {
+      'content-type': 'application/json',
+      ...(cookie ? { cookie } : {}),
+    },
+    body: JSON.stringify(body),
+  })
+
+const deleteGalleryItem = (id: string, itemId: string, cookie: string) =>
+  app.request(`/admin/suppliers/${id}/gallery/${itemId}`, {
+    method: 'DELETE',
+    headers: {
+      'content-type': 'application/json',
+      ...(cookie ? { cookie } : {}),
+    },
+  })
+
+const reorderGallery = (id: string, cookie: string, itemIds: string[]) =>
+  app.request(`/admin/suppliers/${id}/gallery/order`, {
+    method: 'PUT',
+    headers: {
+      'content-type': 'application/json',
+      ...(cookie ? { cookie } : {}),
+    },
+    body: JSON.stringify({ itemIds }),
+  })
+
+type GalleryItemBody = {
+  id: string
+  mediaId: string
+  imageUrl: string
+  caption: string | null
+  altText: string
+  linkUrl: string | null
+  displayOrder: number
+}
+
+const galleryOf = async (id: string, cookie: string) => {
+  const res = await getSupplierById(id, cookie)
+  const json = (await res.json()) as { gallery: GalleryItemBody[] }
+  return json.gallery
+}
 
 const createdId = async (cookie: string, body?: unknown): Promise<string> => {
   const res = await createSupplier(cookie, body)
@@ -429,5 +486,516 @@ describe('delete a supplier', () => {
     expect(workshop.status).toBe(401)
     expect(unauthenticated.status).toBe(401)
     expect(await db.select().from(suppliers)).toHaveLength(1)
+  })
+})
+
+describe('supplier profile fields', () => {
+  it('creates a supplier with every optional profile field', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const uploader = await loginAs(UPLOADER)
+    const featured = await createReadyMedia(uploader)
+
+    const res = await createSupplier(admin, {
+      name: 'Kivu Coffee',
+      slug: 'kivu-coffee',
+      email: ' hello@kivu.example ',
+      phone: '+243 900 000 000',
+      websiteUrl: 'https://kivu.example',
+      address: '1 Lake Road, Goma',
+      featuredMediaId: featured,
+    })
+
+    expect(res.status).toBe(201)
+    expect(await res.json()).toMatchObject({
+      email: 'hello@kivu.example',
+      phone: '+243 900 000 000',
+      websiteUrl: 'https://kivu.example',
+      address: '1 Lake Road, Goma',
+      featuredMediaId: featured,
+    })
+  })
+
+  it('defaults every optional profile field to null', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+
+    const res = await createSupplier(admin)
+
+    expect(res.status).toBe(201)
+    expect(await res.json()).toMatchObject({
+      email: null,
+      phone: null,
+      websiteUrl: null,
+      address: null,
+      featuredMediaId: null,
+    })
+  })
+
+  it('updates and clears profile fields with null', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const id = await createdId(admin)
+
+    const updated = await patchSupplier(id, admin, {
+      email: 'hello@kivu.example',
+      phone: '+243 900 000 000',
+      websiteUrl: 'https://kivu.example',
+      address: '1 Lake Road, Goma',
+    })
+    const cleared = await patchSupplier(id, admin, {
+      email: null,
+      phone: null,
+      websiteUrl: null,
+      address: null,
+    })
+
+    expect(updated.status).toBe(200)
+    expect(await updated.json()).toMatchObject({
+      email: 'hello@kivu.example',
+      phone: '+243 900 000 000',
+      websiteUrl: 'https://kivu.example',
+      address: '1 Lake Road, Goma',
+    })
+    expect(cleared.status).toBe(200)
+    expect(await cleared.json()).toMatchObject({
+      email: null,
+      phone: null,
+      websiteUrl: null,
+      address: null,
+    })
+  })
+
+  it('rejects a malformed email and a non-http url', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const id = await createdId(admin)
+
+    const email = await patchSupplier(id, admin, { email: 'not-an-email' })
+    const url = await patchSupplier(id, admin, { websiteUrl: 'ftp://x' })
+    const relative = await patchSupplier(id, admin, { websiteUrl: '/about' })
+
+    expect(email.status).toBe(400)
+    expect(url.status).toBe(400)
+    expect(relative.status).toBe(400)
+  })
+
+  it('rejects an empty phone and empty gallery link url stays valid', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const id = await createdId(admin)
+
+    const res = await patchSupplier(id, admin, { phone: '   ' })
+
+    expect(res.status).toBe(400)
+  })
+
+  it('rejects a featured image that is pending or unknown', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const id = await createdId(admin)
+    const pending = await createPendingMedia(await loginAs(UPLOADER))
+
+    const unknown = await patchSupplier(id, admin, {
+      featuredMediaId: crypto.randomUUID(),
+    })
+    const notReady = await patchSupplier(id, admin, {
+      featuredMediaId: pending,
+    })
+
+    expect(unknown.status).toBe(400)
+    expect(await unknown.json()).toMatchObject({
+      error: { code: 'MEDIA_NOT_READY' },
+    })
+    expect(notReady.status).toBe(400)
+  })
+
+  it('resolves the featured image url and clears it with null', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const uploader = await loginAs(UPLOADER)
+    const featured = await createReadyMedia(uploader)
+    const id = await createdId(admin)
+
+    const updated = await patchSupplier(id, admin, {
+      featuredMediaId: featured,
+    })
+    const detail = await getSupplierById(id, admin)
+    const cleared = await patchSupplier(id, admin, { featuredMediaId: null })
+
+    expect(updated.status).toBe(200)
+    expect(await detail.json()).toMatchObject({
+      featuredMediaId: featured,
+      featuredImageUrl: expect.stringContaining(env.S3_BUCKET),
+    })
+    expect(cleared.status).toBe(200)
+    const afterClear = await getSupplierById(id, admin)
+    expect(await afterClear.json()).toMatchObject({
+      featuredMediaId: null,
+      featuredImageUrl: null,
+    })
+  })
+})
+
+describe('supplier gallery', () => {
+  const setup = async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const uploader = await loginAs(UPLOADER)
+    const id = await createdId(admin)
+    return { admin, uploader, id }
+  }
+
+  it('adds an item and resolves its image url', async () => {
+    const { admin, uploader, id } = await setup()
+    const mediaId = await createReadyMedia(uploader)
+
+    const res = await addGalleryItem(id, admin, {
+      mediaId,
+      altText: 'Warehouse exterior',
+      caption: 'Our Goma warehouse',
+      linkUrl: 'https://kivu.example/tour',
+    })
+
+    expect(res.status).toBe(201)
+    expect(await res.json()).toMatchObject({
+      id: expect.any(String),
+      mediaId,
+      imageUrl: expect.stringContaining(env.S3_BUCKET),
+      caption: 'Our Goma warehouse',
+      altText: 'Warehouse exterior',
+      linkUrl: 'https://kivu.example/tour',
+      displayOrder: 0,
+    })
+  })
+
+  it('appends items in insertion order when no order is supplied', async () => {
+    const { admin, uploader, id } = await setup()
+    const first = await createReadyMedia(uploader)
+    const second = await createReadyMedia(uploader)
+    const third = await createReadyMedia(uploader)
+
+    await addGalleryItem(id, admin, { mediaId: first, altText: 'one' })
+    await addGalleryItem(id, admin, { mediaId: second, altText: 'two' })
+    await addGalleryItem(id, admin, { mediaId: third, altText: 'three' })
+
+    const gallery = await galleryOf(id, admin)
+
+    expect(gallery.map((item) => item.mediaId)).toEqual([first, second, third])
+    expect(gallery.map((item) => item.displayOrder)).toEqual([0, 1, 2])
+  })
+
+  it('honours an explicit display order and appends after the last item', async () => {
+    const { admin, uploader, id } = await setup()
+    const first = await createReadyMedia(uploader)
+    const second = await createReadyMedia(uploader)
+
+    await addGalleryItem(id, admin, {
+      mediaId: first,
+      altText: 'placed ahead',
+      displayOrder: 10,
+    })
+    await addGalleryItem(id, admin, { mediaId: second, altText: 'appended' })
+
+    const gallery = await galleryOf(id, admin)
+
+    expect(gallery.map((item) => item.mediaId)).toEqual([first, second])
+    expect(gallery.map((item) => item.displayOrder)).toEqual([10, 11])
+  })
+
+  it('breaks display order ties deterministically by creation order', async () => {
+    const { admin, uploader, id } = await setup()
+    const first = await createReadyMedia(uploader)
+    const second = await createReadyMedia(uploader)
+
+    await addGalleryItem(id, admin, {
+      mediaId: first,
+      altText: 'first',
+      displayOrder: 3,
+    })
+    await addGalleryItem(id, admin, {
+      mediaId: second,
+      altText: 'second',
+      displayOrder: 3,
+    })
+
+    const gallery = await galleryOf(id, admin)
+
+    expect(gallery.map((item) => item.mediaId)).toEqual([first, second])
+    expect(gallery.map((item) => item.displayOrder)).toEqual([3, 3])
+  })
+
+  it('rejects empty alt text, a malformed link, and media that is not ready', async () => {
+    const { admin, uploader, id } = await setup()
+    const ready = await createReadyMedia(uploader)
+    const pending = await createPendingMedia(uploader)
+
+    const emptyAlt = await addGalleryItem(id, admin, {
+      mediaId: ready,
+      altText: '   ',
+    })
+    const badLink = await addGalleryItem(id, admin, {
+      mediaId: ready,
+      altText: 'fine',
+      linkUrl: 'not-a-url',
+    })
+    const notReady = await addGalleryItem(id, admin, {
+      mediaId: pending,
+      altText: 'fine',
+    })
+    const unknown = await addGalleryItem(id, admin, {
+      mediaId: crypto.randomUUID(),
+      altText: 'fine',
+    })
+
+    expect(emptyAlt.status).toBe(400)
+    expect(badLink.status).toBe(400)
+    expect(notReady.status).toBe(400)
+    expect(await notReady.json()).toMatchObject({
+      error: { code: 'MEDIA_NOT_READY' },
+    })
+    expect(unknown.status).toBe(400)
+    expect(await db.select().from(supplierGalleryItems)).toHaveLength(0)
+  })
+
+  it('returns 404 when adding to an unknown supplier', async () => {
+    const { admin, uploader } = await setup()
+    const mediaId = await createReadyMedia(uploader)
+
+    const res = await addGalleryItem(crypto.randomUUID(), admin, {
+      mediaId,
+      altText: 'fine',
+    })
+
+    expect(res.status).toBe(404)
+  })
+
+  it('prevents the same media twice in one gallery but allows it across suppliers', async () => {
+    const { admin, uploader, id } = await setup()
+    const mediaId = await createReadyMedia(uploader)
+    const other = await createdId(admin, {
+      name: 'Lake Tea',
+      slug: 'lake-tea',
+    })
+
+    await addGalleryItem(id, admin, { mediaId, altText: 'one' })
+
+    const duplicate = await addGalleryItem(id, admin, {
+      mediaId,
+      altText: 'again',
+    })
+    const elsewhere = await addGalleryItem(other, admin, {
+      mediaId,
+      altText: 'shared',
+    })
+
+    expect(duplicate.status).toBe(409)
+    expect(await duplicate.json()).toMatchObject({
+      error: { code: 'GALLERY_MEDIA_DUPLICATE' },
+    })
+    expect(elsewhere.status).toBe(201)
+  })
+
+  it('updates metadata and display order', async () => {
+    const { admin, uploader, id } = await setup()
+    const mediaId = await createReadyMedia(uploader)
+    const created = (await (
+      await addGalleryItem(id, admin, { mediaId, altText: 'before' })
+    ).json()) as GalleryItemBody
+
+    const res = await patchGalleryItem(id, created.id, admin, {
+      caption: 'New caption',
+      altText: 'after',
+      linkUrl: 'https://kivu.example/new',
+      displayOrder: 5,
+    })
+
+    expect(res.status).toBe(200)
+    expect(await res.json()).toMatchObject({
+      id: created.id,
+      caption: 'New caption',
+      altText: 'after',
+      linkUrl: 'https://kivu.example/new',
+      displayOrder: 5,
+    })
+
+    const cleared = await patchGalleryItem(id, created.id, admin, {
+      caption: null,
+      linkUrl: null,
+    })
+    expect(await cleared.json()).toMatchObject({
+      caption: null,
+      linkUrl: null,
+      altText: 'after',
+    })
+  })
+
+  it('returns 404 when patching or deleting an item of another supplier', async () => {
+    const { admin, uploader, id } = await setup()
+    const mediaId = await createReadyMedia(uploader)
+    const created = (await (
+      await addGalleryItem(id, admin, { mediaId, altText: 'mine' })
+    ).json()) as GalleryItemBody
+    const other = await createdId(admin, {
+      name: 'Lake Tea',
+      slug: 'lake-tea',
+    })
+
+    const patched = await patchGalleryItem(other, created.id, admin, {
+      altText: 'stolen',
+    })
+    const deleted = await deleteGalleryItem(other, created.id, admin)
+
+    expect(patched.status).toBe(404)
+    expect(deleted.status).toBe(404)
+    expect(await db.select().from(supplierGalleryItems)).toHaveLength(1)
+  })
+
+  it('reorders the complete gallery in one request', async () => {
+    const { admin, uploader, id } = await setup()
+    const ids: string[] = []
+    for (const altText of ['one', 'two', 'three']) {
+      const mediaId = await createReadyMedia(uploader)
+      const created = (await (
+        await addGalleryItem(id, admin, { mediaId, altText })
+      ).json()) as GalleryItemBody
+      ids.push(created.id)
+    }
+
+    const res = await reorderGallery(id, admin, [ids[2]!, ids[0]!, ids[1]!])
+
+    expect(res.status).toBe(200)
+    const gallery = (await res.json()) as GalleryItemBody[]
+    expect(gallery.map((item) => item.id)).toEqual([ids[2], ids[0], ids[1]])
+    expect(gallery.map((item) => item.displayOrder)).toEqual([0, 1, 2])
+
+    const persisted = await galleryOf(id, admin)
+    expect(persisted.map((item) => item.id)).toEqual([ids[2], ids[0], ids[1]])
+  })
+
+  it('rejects a reorder that does not match the current items', async () => {
+    const { admin, uploader, id } = await setup()
+    const mediaId = await createReadyMedia(uploader)
+    const created = (await (
+      await addGalleryItem(id, admin, { mediaId, altText: 'one' })
+    ).json()) as GalleryItemBody
+
+    const missing = await reorderGallery(id, admin, [])
+    const extra = await reorderGallery(id, admin, [
+      created.id,
+      crypto.randomUUID(),
+    ])
+
+    expect(missing.status).toBe(400)
+    expect(extra.status).toBe(400)
+    expect(await extra.json()).toMatchObject({
+      error: { code: 'GALLERY_ORDER_MISMATCH' },
+    })
+    expect(await galleryOf(id, admin)).toHaveLength(1)
+  })
+
+  it('removes an item without deleting the underlying media', async () => {
+    const { admin, uploader, id } = await setup()
+    const mediaId = await createReadyMedia(uploader)
+    const created = (await (
+      await addGalleryItem(id, admin, { mediaId, altText: 'gone' })
+    ).json()) as GalleryItemBody
+
+    const res = await deleteGalleryItem(id, created.id, admin)
+
+    expect(res.status).toBe(204)
+    expect(await db.select().from(supplierGalleryItems)).toHaveLength(0)
+    expect(await db.select().from(media)).toHaveLength(1)
+  })
+
+  it('cascades gallery rows when the supplier is deleted but keeps the media', async () => {
+    const { admin, uploader, id } = await setup()
+    const mediaId = await createReadyMedia(uploader)
+    await addGalleryItem(id, admin, { mediaId, altText: 'one' })
+
+    const res = await deleteSupplier(id, admin)
+
+    expect(res.status).toBe(204)
+    expect(await db.select().from(supplierGalleryItems)).toHaveLength(0)
+    expect(await db.select().from(media)).toHaveLength(1)
+  })
+
+  it('rejects gallery writes from a workshop session and an anonymous request', async () => {
+    const { admin, uploader, id } = await setup()
+    const basic = await loginAs(BASIC)
+    const mediaId = await createReadyMedia(uploader)
+    const created = (await (
+      await addGalleryItem(id, admin, { mediaId, altText: 'one' })
+    ).json()) as GalleryItemBody
+
+    const workshopAdd = await addGalleryItem(id, basic, {
+      mediaId,
+      altText: 'x',
+    })
+    const anonymousAdd = await addGalleryItem(id, '', {
+      mediaId,
+      altText: 'x',
+    })
+    const workshopReorder = await reorderGallery(id, basic, [created.id])
+    const anonymousDelete = await deleteGalleryItem(id, created.id, '')
+
+    expect(workshopAdd.status).toBe(401)
+    expect(anonymousAdd.status).toBe(401)
+    expect(workshopReorder.status).toBe(401)
+    expect(anonymousDelete.status).toBe(401)
+    expect(await db.select().from(supplierGalleryItems)).toHaveLength(1)
+  })
+})
+
+describe('supplier detail responses', () => {
+  it('exposes contact details, featured image and gallery on the public detail', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const uploader = await loginAs(UPLOADER)
+    const featured = await createReadyMedia(uploader)
+    const galleryMedia = await createReadyMedia(uploader)
+    const id = await createdId(admin, {
+      name: 'Kivu Coffee',
+      slug: 'kivu-coffee',
+      email: 'hello@kivu.example',
+      phone: '+243 900 000 000',
+      websiteUrl: 'https://kivu.example',
+      address: '1 Lake Road, Goma',
+      featuredMediaId: featured,
+    })
+    await addGalleryItem(id, admin, {
+      mediaId: galleryMedia,
+      altText: 'Warehouse exterior',
+    })
+    await show('kivu-coffee')
+
+    const res = await getSupplier('kivu-coffee')
+
+    expect(res.status).toBe(200)
+    expect(await res.json()).toMatchObject({
+      email: 'hello@kivu.example',
+      phone: '+243 900 000 000',
+      websiteUrl: 'https://kivu.example',
+      address: '1 Lake Road, Goma',
+      featuredMediaId: featured,
+      featuredImageUrl: expect.stringContaining(env.S3_BUCKET),
+      gallery: [
+        {
+          mediaId: galleryMedia,
+          imageUrl: expect.stringContaining(env.S3_BUCKET),
+          altText: 'Warehouse exterior',
+          displayOrder: 0,
+        },
+      ],
+    })
+  })
+
+  it('serves the admin detail with the gallery and 404s for unknown ids', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const id = await createdId(admin)
+
+    const detail = await getSupplierById(id, admin)
+    const unknown = await getSupplierById(crypto.randomUUID(), admin)
+    const anonymous = await app.request(`/admin/suppliers/${id}`)
+
+    expect(detail.status).toBe(200)
+    expect(await detail.json()).toMatchObject({
+      slug: 'kivu-coffee',
+      gallery: [],
+      featuredImageUrl: null,
+    })
+    expect(unknown.status).toBe(404)
+    expect(anonymous.status).toBe(401)
   })
 })

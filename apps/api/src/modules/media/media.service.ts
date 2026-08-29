@@ -4,12 +4,14 @@ import {
   PutObjectCommand,
 } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, or } from 'drizzle-orm'
 
 import { db } from '../../db'
+import { isReferenceViolation } from '../../db/errors'
 import { env } from '../../env'
 import { AppError } from '../../lib/errors'
 import { s3 } from '../../storage'
+import { suppliers } from '../suppliers/suppliers.tables'
 import { ALLOWED_MIME_TYPES, type CreateUploadInput } from './media.schemas'
 import { media, MEDIA_STATUSES } from './media.tables'
 
@@ -122,10 +124,29 @@ export const getPublicUrl = (key: string): string =>
   `${env.S3_ENDPOINT}/${env.S3_BUCKET}/${key}`
 
 export const remove = async (mediaId: string): Promise<void> => {
+  const [supplier] = await db
+    .select({ id: suppliers.id })
+    .from(suppliers)
+    .where(
+      or(
+        eq(suppliers.logoMediaId, mediaId),
+        eq(suppliers.featuredMediaId, mediaId),
+      ),
+    )
+    .limit(1)
+
+  if (supplier) throw new AppError('MEDIA_IN_USE')
+
   const [row] = await db
     .delete(media)
     .where(eq(media.id, mediaId))
     .returning({ key: media.key })
+    .catch((error: unknown) => {
+      if (isReferenceViolation(error)) {
+        throw new AppError('MEDIA_IN_USE')
+      }
+      throw error
+    })
 
   if (!row) throw new AppError('NOT_FOUND')
 
