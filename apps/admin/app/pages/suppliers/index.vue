@@ -11,8 +11,7 @@ const { data, error, refresh } = await useAsyncData('admin-suppliers', () =>
 
 const creating = ref(false)
 const form = reactive({ name: '', slug: '', description: '' })
-const formError = ref<ErrorCode | null>(null)
-const saving = ref(false)
+const { pending: saving, error: formError, run: runCreate } = useAsyncAction()
 
 const openCreate = () => {
   form.name = ''
@@ -22,11 +21,8 @@ const openCreate = () => {
   creating.value = true
 }
 
-const submit = async () => {
-  if (saving.value) return
-  saving.value = true
-  formError.value = null
-  try {
+const submit = () =>
+  runCreate(async () => {
     await create({
       name: form.name,
       slug: form.slug,
@@ -34,28 +30,19 @@ const submit = async () => {
     })
     creating.value = false
     await refresh()
-  } catch (cause) {
-    formError.value = toErrorCode(cause)
-  } finally {
-    saving.value = false
-  }
-}
+  })
 
 const doomed = ref<AdminSupplierListItem | null>(null)
-const actionError = ref<ErrorCode | null>(null)
+const { error: actionError, run: runRemove } = useAsyncAction()
 
 const confirmRemove = async () => {
   const supplier = doomed.value
   if (!supplier) return
-  actionError.value = null
-  try {
+  await runRemove(async () => {
     await remove(supplier.id)
     await refresh()
-  } catch (cause) {
-    actionError.value = toErrorCode(cause)
-  } finally {
-    doomed.value = null
-  }
+  })
+  doomed.value = null
 }
 </script>
 

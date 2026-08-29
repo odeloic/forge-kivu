@@ -16,6 +16,7 @@
     "@forge-kivu/types": "workspace:*",
     "@forge-kivu/ui": "workspace:*",
     "nuxt": "4.5.2",
+    "vee-validate": "catalog:",
     "vue": "3.5.40",
     "vue-router": "5.2.0",
     "zod": "catalog:"

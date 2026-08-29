@@ -6,22 +6,13 @@ const { login } = useSession()
 
 const email = ref('')
 const password = ref('')
-const error = ref<ErrorCode | null>(null)
-const pending = ref(false)
+const { pending, error, run } = useAsyncAction()
 
-const submit = async () => {
-  if (pending.value) return
-  pending.value = true
-  error.value = null
-  try {
+const submit = () =>
+  run(async () => {
     await login(email.value, password.value)
     await navigateTo(safeRedirect(route.query.redirect))
-  } catch (cause) {
-    error.value = toErrorCode(cause)
-  } finally {
-    pending.value = false
-  }
-}
+  })
 </script>
 
 <template>

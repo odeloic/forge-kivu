@@ -1,19 +1,27 @@
 import type {
   AdminSupplier,
+  AdminSupplierDetail,
   AdminSupplierListItem,
 } from '@forge-kivu/api-client'
+import type {
+  CreateSupplierInput,
+  UpdateSupplierInput,
+} from '@forge-kivu/types'
 
-export type SupplierInput = {
-  name: string
-  slug: string
-  description: string | null
-}
+export type SupplierInput = CreateSupplierInput
+export type SupplierPatch = UpdateSupplierInput
 
 export const useSuppliers = () => {
   const api = useApi()
 
   const list = async (): Promise<AdminSupplierListItem[]> => {
     const res = await api.admin.suppliers.$get()
+    if (!res.ok) throw await toApiError(res)
+    return res.json()
+  }
+
+  const detail = async (id: string): Promise<AdminSupplierDetail> => {
+    const res = await api.admin.suppliers[':id'].$get({ param: { id } })
     if (!res.ok) throw await toApiError(res)
     return res.json()
   }
@@ -26,7 +34,7 @@ export const useSuppliers = () => {
 
   const update = async (
     id: string,
-    patch: Partial<SupplierInput & { visible: boolean }>,
+    patch: SupplierPatch,
   ): Promise<AdminSupplier> => {
     const res = await api.admin.suppliers[':id'].$patch({
       param: { id },
@@ -41,5 +49,13 @@ export const useSuppliers = () => {
     if (!res.ok) throw await toApiError(res)
   }
 
-  return { list, create, update, remove }
+  const addGalleryItem = async (id: string, mediaId: string): Promise<void> => {
+    const res = await api.admin.suppliers[':id'].gallery.$post({
+      param: { id },
+      json: { mediaId },
+    })
+    if (!res.ok) throw await toApiError(res)
+  }
+
+  return { list, detail, create, update, remove, addGalleryItem }
 }
