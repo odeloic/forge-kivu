@@ -27,6 +27,14 @@ if (error.value) throw error.value
 
 const tab = ref<(typeof TABS)[number]['value']>('profile')
 
+const counts = computed<Record<(typeof TABS)[number]['value'], number | null>>(
+  () => ({
+    profile: null,
+    gallery: data.value?.gallery.length ?? 0,
+    products: data.value?.productCount ?? 0,
+  }),
+)
+
 const { pending: saving, error: actionError, run } = useAsyncAction()
 
 const toggleVisible = () =>
@@ -38,7 +46,6 @@ const toggleVisible = () =>
   })
 
 const confirming = ref(false)
-const uploading = ref(false)
 
 const confirmRemove = () =>
   run(async () => {
@@ -81,6 +88,9 @@ const confirmRemove = () =>
           class="tab"
         >
           {{ item.label }}
+          <span v-if="counts[item.value] !== null" class="count">
+            {{ counts[item.value] }}
+          </span>
         </TabsTrigger>
       </TabsList>
 
@@ -97,38 +107,14 @@ const confirmRemove = () =>
         />
       </TabsContent>
 
-      <TabsContent value="gallery" class="panel gallery">
-        <div class="gallery-header">
-          <p class="muted">
-            {{ data.gallery.length }}
-            {{ data.gallery.length === 1 ? 'image' : 'images' }}
-          </p>
-          <div class="spacer" />
-          <UiButton variant="primary" @click="uploading = true">
-            Add images
-          </UiButton>
-        </div>
-
-        <ul v-if="data.gallery.length" class="grid">
-          <li v-for="item in data.gallery" :key="item.id" class="card">
-            <img :src="item.imageUrl" :alt="item.altText ?? ''" />
-            <p class="caption">{{ item.caption ?? 'No caption' }}</p>
-            <p v-if="!item.altText" class="flag status-warn">Needs alt text</p>
-          </li>
-        </ul>
-        <p v-else class="muted">No images yet.</p>
+      <TabsContent value="gallery" class="panel">
+        <SupplierGalleryTab :supplier="data" :refresh="refresh" />
       </TabsContent>
 
       <TabsContent value="products" class="panel">
-        <p class="muted">Supplier products are not wired up yet.</p>
+        <SupplierProductsTab :supplier-id="data.id" />
       </TabsContent>
     </TabsRoot>
-
-    <GalleryUploadDialog
-      v-model:open="uploading"
-      :supplier-id="data.id"
-      @attached="refresh"
-    />
 
     <UiConfirmDialog
       v-model:open="confirming"
@@ -140,48 +126,6 @@ const confirmRemove = () =>
 </template>
 
 <style scoped>
-.gallery {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-8);
-}
-
-.gallery-header {
-  display: flex;
-  align-items: center;
-  gap: var(--space-6);
-}
-
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
-  gap: var(--space-7);
-  list-style: none;
-}
-
-.card {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-
-.card img {
-  aspect-ratio: 4 / 3;
-  inline-size: 100%;
-  border: var(--border-hairline) solid var(--color-rule);
-  object-fit: cover;
-}
-
-.caption {
-  font-size: var(--text-xs);
-}
-
-.flag {
-  font-size: var(--text-2xs);
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
-}
-
 .page {
   display: flex;
   flex-direction: column;
@@ -230,6 +174,15 @@ const confirmRemove = () =>
   color: var(--color-muted);
   font-size: var(--text-sm);
   font-weight: var(--weight-regular);
+}
+
+.tab .count {
+  margin-inline-start: var(--space-3);
+  color: var(--color-faint);
+}
+
+.tab[data-state='active'] .count {
+  color: var(--color-muted);
 }
 
 .tab[data-state='active'] {

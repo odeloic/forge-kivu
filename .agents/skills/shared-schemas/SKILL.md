@@ -57,11 +57,14 @@ Routes keep using `zValidator('json', createSupplierSchema)` unchanged.
 
 ## Form side
 
-Use vee-validate with the shared form schema passed directly (zod 4 implements Standard Schema; no `toTypedSchema` adapter needed):
+Do not pass a raw zod schema as `validationSchema` — vee-validate misreads it as a map of
+per-field rules and silently blocks submit with an empty `errors` bag. Wrap it with
+`toTypedSchema` from `packages/nuxt-base/app/utils/validation.ts` (a small Standard Schema to
+vee-validate adapter, auto-imported in both apps):
 
 ```ts
 const { defineField, errors, handleSubmit } = useForm({
-  validationSchema: supplierProfileFormSchema,
+  validationSchema: toTypedSchema(supplierProfileFormSchema),
   initialValues: { name: props.supplier.name, email: props.supplier.email ?? '' },
 })
 const [name, nameAttrs] = defineField('name')

@@ -1,7 +1,14 @@
 # Supplier Profile and Gallery Extension
 
 Status: ~~agreed design; implementation has not started.~~
-Status: implemented (migration `0012_pale_retro_girl`, supplier profile fields, `supplier_gallery_items`, gallery admin endpoints, media-deletion restriction).
+~~Status: implemented (migration `0012_pale_retro_girl`, supplier profile fields, `supplier_gallery_items`, gallery admin endpoints, media-deletion restriction).~~
+Status: implemented end to end. Backend as above, plus migration
+`0013_nifty_vance_astro` making `alt_text` nullable and defaulting
+`display_order`. The admin UI lives on `apps/admin/app/pages/suppliers/[slug].vue`
+under Profile / Gallery / Products tabs: profile fields and images on Profile,
+and an ordered gallery table on Gallery with in-place editing, drag-and-keyboard
+reordering, removal and a preview lightbox. Uploading new images is blocked by
+the media session-audience issue recorded in `media-upload-client-spec.md`.
 
 ## Goal
 

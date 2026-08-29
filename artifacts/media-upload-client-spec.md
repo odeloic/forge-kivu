@@ -1,6 +1,8 @@
 # Media Upload Client Spec
 
-Status: implemented.
+~~Status: implemented.~~
+Status: implemented, but **the admin app cannot reach `POST /media`** — see
+"Session audience blocks admin uploads" below.
 
 The browser half of the media module: how `apps/admin`, `apps/web` and any
 future app turn a dropped file into a `ready` media id.
@@ -331,3 +333,38 @@ closing the dialog mid-queue aborts what is still in flight.
 8. Client-invalid files occupy failed tiles instead of being dropped.
 9. The `ui` components take dumb props and never import the `UploadStatus` type.
 10. Logo and featured image reuse the composable directly without a dialog.
+
+
+## Session audience blocks admin uploads
+
+`POST /media` and `POST /media/:id/confirm` are mounted with the `auth`
+middleware, which reads `SESSION_COOKIE` and validates against
+`SESSION_AUDIENCES.WORKSHOP`. `apps/admin` only ever establishes an admin
+session (`ADMIN_SESSION_COOKIE`, `SESSION_AUDIENCES.ADMIN`), so every upload the
+admin app starts fails at the first request.
+
+Verified from a logged-in admin browser session:
+
+```js
+await fetch('/api/media', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ mimeType: 'image/png', sizeBytes: 1024 }) })
+// 401 Unauthorized
+```
+
+This blocks the gallery "Add image" dialog and the profile logo / featured
+"Replace" pickers — the client work is in place and correct, but the entry point
+returns 401 before any of it runs. Fixing it means deciding which audiences may
+upload: either mount upload routes under `/admin` with `adminAuth`, or accept
+both audiences on the shared routes. That is an auth-model decision, left open
+here rather than settled in passing.
+
+## Alt text on create — decision
+
+The `alt-text-moved` annotation on the design canvas left this open: "the spec
+requires `alt_text` on create, so either the row is created without it or
+creation waits until the row is filled in."
+
+Resolved as **created without it**. `supplier_gallery_items.alt_text` is
+nullable (migration `0013_nifty_vance_astro`), `createGalleryItemSchema` takes
+`altText` as `nullish`, and the gallery table flags an undescribed row with
+"Needs alt text" until it is edited in place.

@@ -5,6 +5,7 @@ import type {
 } from '@forge-kivu/api-client'
 import type {
   CreateSupplierInput,
+  UpdateGalleryItemInput,
   UpdateSupplierInput,
 } from '@forge-kivu/types'
 
@@ -57,5 +58,48 @@ export const useSuppliers = () => {
     if (!res.ok) throw await toApiError(res)
   }
 
-  return { list, detail, create, update, remove, addGalleryItem }
+  const updateGalleryItem = async (
+    id: string,
+    itemId: string,
+    patch: UpdateGalleryItemInput,
+  ): Promise<void> => {
+    const res = await api.admin.suppliers[':id'].gallery[':itemId'].$patch({
+      param: { id, itemId },
+      json: patch,
+    })
+    if (!res.ok) throw await toApiError(res)
+  }
+
+  const removeGalleryItem = async (
+    id: string,
+    itemId: string,
+  ): Promise<void> => {
+    const res = await api.admin.suppliers[':id'].gallery[':itemId'].$delete({
+      param: { id, itemId },
+    })
+    if (!res.ok) throw await toApiError(res)
+  }
+
+  const reorderGallery = async (
+    id: string,
+    itemIds: string[],
+  ): Promise<void> => {
+    const res = await api.admin.suppliers[':id'].gallery.order.$put({
+      param: { id },
+      json: { itemIds },
+    })
+    if (!res.ok) throw await toApiError(res)
+  }
+
+  return {
+    list,
+    detail,
+    create,
+    update,
+    remove,
+    addGalleryItem,
+    updateGalleryItem,
+    removeGalleryItem,
+    reorderGallery,
+  }
 }

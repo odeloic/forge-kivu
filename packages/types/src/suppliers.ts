@@ -95,6 +95,12 @@ export const supplierProfileFormSchema = z.object({
   address: optionalField(supplierFields.address),
 })
 
+export const galleryItemFormSchema = z.object({
+  altText: optionalField(supplierFields.altText),
+  caption: optionalField(supplierFields.caption),
+  linkUrl: optionalField(supplierFields.websiteUrl),
+})
+
 export type CreateSupplierInput = z.infer<typeof createSupplierSchema>
 export type UpdateSupplierInput = z.infer<typeof updateSupplierSchema>
 export type CreateGalleryItemInput = z.infer<typeof createGalleryItemSchema>
@@ -102,3 +108,4 @@ export type UpdateGalleryItemInput = z.infer<typeof updateGalleryItemSchema>
 export type SupplierProfileFormValues = z.output<
   typeof supplierProfileFormSchema
 >
+export type GalleryItemFormValues = z.output<typeof galleryItemFormSchema>

@@ -10,7 +10,7 @@ const emit = defineEmits<{ saved: [] }>()
 const { update } = useSuppliers()
 
 const { defineField, errors, handleSubmit } = useForm({
-  validationSchema: supplierProfileFormSchema,
+  validationSchema: toTypedSchema(supplierProfileFormSchema),
   initialValues: {
     name: props.supplier.name,
     slug: props.supplier.slug,
