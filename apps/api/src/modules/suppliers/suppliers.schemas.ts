@@ -57,7 +57,7 @@ export const supplierIdParamSchema = z.object({ id: z.uuid() })
 export const createGalleryItemSchema = z.object({
   mediaId: z.uuid(),
   caption: captionSchema.nullish(),
-  altText: altTextSchema,
+  altText: altTextSchema.nullish(),
   linkUrl: urlSchema.nullish(),
   displayOrder: displayOrderSchema.optional(),
 })
@@ -65,7 +65,7 @@ export const createGalleryItemSchema = z.object({
 export const updateGalleryItemSchema = z
   .object({
     caption: captionSchema.nullable(),
-    altText: altTextSchema,
+    altText: altTextSchema.nullable(),
     linkUrl: urlSchema.nullable(),
     displayOrder: displayOrderSchema,
   })

@@ -43,9 +43,9 @@ export const supplierGalleryItems = pgTable(
       .notNull()
       .references(() => media.id),
     caption: text('caption'),
-    altText: text('alt_text').notNull(),
+    altText: text('alt_text'),
     linkUrl: text('link_url'),
-    displayOrder: integer('display_order').notNull(),
+    displayOrder: integer('display_order').notNull().default(0),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
