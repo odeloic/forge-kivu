@@ -94,19 +94,23 @@ public   /                                    landing
 
 authenticated /workshop
          /workshop/projects
-         /workshop/projects/:id/overview
-         /workshop/projects/:id/boqs
-         /workshop/projects/:id/inventory
-         /workshop/projects/:id/settings
+         ~~/workshop/projects/:id/overview~~
+         ~~/workshop/projects/:id/boqs~~
+         ~~/workshop/projects/:id/inventory~~
+         ~~/workshop/projects/:id/settings~~
+         /workshop/projects/new                 five-step wizard
+         /workshop/projects/:id                 four tabs on one route
+         /workshop/projects/:id/products        catalogue picker
 
 admin-only    /admin                         dashboard
 ```
 
-~~Only five pages call the API.~~ Seven pages call the API: `/` reads
-`GET /catalogue/products` and `GET /catalogue/products/facets`, and
+~~Only five pages call the API.~~ ~~Seven pages call the API:~~ Ten pages call the API.
+`/` reads `GET /catalogue/products` and `GET /catalogue/products/facets`,
 `/products/:supplierSlug/:productSlug` reads
-`GET /catalogue/products/:supplierSlug/:productSlug`. The rest are a heading and
-nothing else.
+`GET /catalogue/products/:supplierSlug/:productSlug`, and the four workshop pages read
+the projects, boq and variant endpoints listed in the table below. The rest are a
+heading and nothing else.
 
 Two gaps the product detail page ships around:
 
@@ -123,6 +127,10 @@ Two gaps the product detail page ships around:
 | `/login` | `POST /auth/login` | the cookie survives the Nuxt proxy |
 | every page | `GET /auth/me` | identity resolves before first paint |
 | `/workshop/projects` | `GET /projects` | an authenticated route returns real data |
+| `/workshop` | `GET /projects` | the overview counts and the recent list |
+| `/workshop/projects/new` | `POST /projects`, `PATCH /projects/:id`, `PUT /projects/:id/items/:variantId`, `GET /catalogue/variants` | the wizard writes the row on step 1 and survives an abandoned run |
+| `/workshop/projects/:id` | `GET /projects/:id`, `GET /projects/:id/boqs`, `GET /boqs/:id`, `POST /projects/:projectId/boqs`, `PUT`/`DELETE /projects/:id/phases/:phase` | the four tabs read one project |
+| `/workshop/projects/:id/products` | `GET /catalogue/variants`, `PUT`/`DELETE /projects/:id/items/:variantId` | the picker saves a diff, not a replacement |
 | `/admin` | `GET /admin/suppliers` | the role gate holds end to end |
 | `error.vue` | — | 403 and 404 both render |
 
@@ -242,7 +250,12 @@ The page markup gets no tests at this stage because it carries no route policy.
    nav entries.
 6. Stub pages are created for `/spaces`, `/brands` and `/contact` even though no
    endpoint exists behind them.
-7. Project sub-pages are real routes (`/workshop/projects/:id/overview`) rather than
-   tabs on one page.
+7. ~~Project sub-pages are real routes (`/workshop/projects/:id/overview`) rather than
+   tabs on one page.~~
+
+   Project detail is four tabs on one route (`/workshop/projects/:id`), selected by a
+   `?tab=` query parameter. The four sibling routes are gone. Adding products is its
+   own route (`/workshop/projects/:id/products`) because the picker is a full screen
+   with its own save action, not a panel.
 8. The seed script reuses the auth service's signup path, so seeded passwords are
    hashed identically to real ones.

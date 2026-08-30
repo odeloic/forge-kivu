@@ -10,60 +10,35 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core'
 
+import {
+  PROJECT_PHASE_VALUES,
+  PROJECT_PHASES,
+  PROJECT_TYPE_VALUES,
+  PROJECT_TYPES,
+  WORK_TYPE_VALUES,
+  WORK_TYPES,
+  type ProjectPhase,
+  type ProjectType,
+  type WorkType,
+} from '@forge-kivu/types'
+
 import { users } from '../auth/auth.tables'
 import { productVariants } from '../catalogue/catalogue.tables'
 
-export const PROJECT_TYPES = {
-  RESIDENTIAL_HOUSE: 'residential_house',
-  APARTMENT_BUILDING: 'apartment_building',
-  COMMERCIAL: 'commercial',
-  INDUSTRIAL: 'industrial',
-  INSTITUTIONAL: 'institutional',
-  OTHER: 'other',
-} as const
+export {
+  PROJECT_PHASES,
+  PROJECT_TYPES,
+  WORK_TYPES,
+  type ProjectPhase,
+  type ProjectType,
+  type WorkType,
+}
 
-export type ProjectType = (typeof PROJECT_TYPES)[keyof typeof PROJECT_TYPES]
+export const projectType = pgEnum('project_type', PROJECT_TYPE_VALUES)
 
-export const projectType = pgEnum('project_type', [
-  PROJECT_TYPES.RESIDENTIAL_HOUSE,
-  PROJECT_TYPES.APARTMENT_BUILDING,
-  PROJECT_TYPES.COMMERCIAL,
-  PROJECT_TYPES.INDUSTRIAL,
-  PROJECT_TYPES.INSTITUTIONAL,
-  PROJECT_TYPES.OTHER,
-])
+export const workType = pgEnum('work_type', WORK_TYPE_VALUES)
 
-export const WORK_TYPES = {
-  NEW_CONSTRUCTION: 'new_construction',
-  RENOVATION: 'renovation',
-  EXTENSION: 'extension',
-  REPAIR: 'repair',
-} as const
-
-export type WorkType = (typeof WORK_TYPES)[keyof typeof WORK_TYPES]
-
-export const workType = pgEnum('work_type', [
-  WORK_TYPES.NEW_CONSTRUCTION,
-  WORK_TYPES.RENOVATION,
-  WORK_TYPES.EXTENSION,
-  WORK_TYPES.REPAIR,
-])
-
-export const PROJECT_PHASES = {
-  FOUNDATION: 'foundation',
-  STRUCTURE: 'structure',
-  ROOFING: 'roofing',
-  FINISHING: 'finishing',
-} as const
-
-export type ProjectPhase = (typeof PROJECT_PHASES)[keyof typeof PROJECT_PHASES]
-
-export const projectPhase = pgEnum('project_phase', [
-  PROJECT_PHASES.FOUNDATION,
-  PROJECT_PHASES.STRUCTURE,
-  PROJECT_PHASES.ROOFING,
-  PROJECT_PHASES.FINISHING,
-])
+export const projectPhase = pgEnum('project_phase', PROJECT_PHASE_VALUES)
 
 export const projects = pgTable('projects', {
   id: uuid('id').primaryKey().defaultRandom(),

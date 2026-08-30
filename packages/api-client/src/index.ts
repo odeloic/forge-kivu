@@ -89,3 +89,34 @@ export type SpecAttribute = InferResponseType<
 >[number]
 
 export type Settings = InferResponseType<ApiClient['settings']['$get'], 200>
+
+export type Project = InferResponseType<ApiClient['projects']['$post'], 201>
+
+export type ProjectListItem = InferResponseType<
+  ApiClient['projects']['$get'],
+  200
+>[number]
+
+export type ProjectDetail = InferResponseType<
+  ApiClient['projects'][':id']['$get'],
+  200
+>
+
+export type ProjectItem = ProjectDetail['items'][number]
+export type ProjectPhaseCompletion = ProjectDetail['phases'][number]
+
+export type BoqSummary = InferResponseType<
+  ApiClient['projects'][':projectId']['boqs']['$get'],
+  200
+>[number]
+
+export type BoqDetail = InferResponseType<ApiClient['boqs'][':id']['$get'], 200>
+
+export type BoqItem = BoqDetail['items'][number]
+
+export type VariantPage = InferResponseType<
+  ApiClient['catalogue']['variants']['$get'],
+  200
+>
+
+export type VariantListItem = VariantPage['items'][number]

@@ -15,7 +15,7 @@ export const PRIMARY_NAV: readonly NavEntry[] = [
 ]
 
 export const WORKSHOP_NAV: readonly NavEntry[] = [
-  { path: '/workshop', label: 'Workshop' },
+  { path: '/workshop', label: 'Overview' },
   { path: '/workshop/projects', label: 'Projects' },
 ]
 
@@ -23,9 +23,13 @@ export const ADMIN_NAV: readonly NavEntry[] = [
   { path: '/admin', label: 'Dashboard' },
 ]
 
-export const projectNav = (id: string): readonly NavEntry[] => [
-  { path: `/workshop/projects/${id}/overview`, label: 'Overview' },
-  { path: `/workshop/projects/${id}/boqs`, label: 'BOQs' },
-  { path: `/workshop/projects/${id}/inventory`, label: 'Inventory' },
-  { path: `/workshop/projects/${id}/settings`, label: 'Settings' },
-]
+export const activeNavPath = (
+  entries: readonly NavEntry[],
+  path: string,
+): string | null =>
+  entries.reduce<string | null>((longest, entry) => {
+    const matches = path === entry.path || path.startsWith(`${entry.path}/`)
+    if (!matches) return longest
+    if (longest !== null && longest.length >= entry.path.length) return longest
+    return entry.path
+  }, null)

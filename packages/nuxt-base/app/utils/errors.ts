@@ -78,3 +78,7 @@ export const fromNuxtError = (error: NuxtError): ErrorCode => {
 }
 
 export const errorMessage = (code: ErrorCode): string => messages[code]
+
+export const rethrowAsNuxtError = (cause: unknown): never => {
+  throw toNuxtError(toErrorCode(cause))
+}
