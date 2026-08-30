@@ -24,3 +24,16 @@ export const optionalField = <T extends z.ZodType<unknown, string>>(
     .string()
     .transform((value) => (value.trim() === '' ? null : value))
     .pipe(schema.nullable())
+
+export const optionalNumberField = <T extends z.ZodType<unknown, number>>(
+  schema: T,
+) =>
+  z
+    .union([z.string(), z.number()])
+    .transform((value) =>
+      typeof value === 'string' && value.trim() === '' ? null : Number(value),
+    )
+    .refine((value) => value === null || !Number.isNaN(value), {
+      message: 'Enter a number.',
+    })
+    .pipe(schema.nullable())

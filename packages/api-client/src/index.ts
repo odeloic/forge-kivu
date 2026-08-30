@@ -68,4 +68,24 @@ export type AdminProductListItem = InferResponseType<
   200
 >[number]
 
+export type AdminProductDetail = InferResponseType<
+  ApiClient['admin']['products'][':id']['$get'],
+  200
+>
+
+export type AdminProductOption = AdminProductDetail['options'][number]
+export type AdminProductVariant = AdminProductDetail['variants'][number]
+export type AdminProductSpec = AdminProductDetail['specs'][number]
+export type AdminProductMedia = AdminProductDetail['media'][number]
+
+export type CategoryNode = InferResponseType<
+  ApiClient['categories']['$get'],
+  200
+>[number]
+
+export type SpecAttribute = InferResponseType<
+  ApiClient['spec-attributes']['$get'],
+  200
+>[number]
+
 export type Settings = InferResponseType<ApiClient['settings']['$get'], 200>

@@ -10,18 +10,13 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core'
 
+import { PRODUCT_STATUSES, type ProductStatus } from '@forge-kivu/types'
+
 import { media } from '../media/media.tables'
 import { suppliers } from '../suppliers/suppliers.tables'
 import { categories, specAttributes } from '../taxonomy/taxonomy.tables'
 
-export const PRODUCT_STATUSES = {
-  DRAFT: 'draft',
-  PUBLISHED: 'published',
-  NOT_AVAILABLE: 'not_available',
-} as const
-
-export type ProductStatus =
-  (typeof PRODUCT_STATUSES)[keyof typeof PRODUCT_STATUSES]
+export { PRODUCT_STATUSES, type ProductStatus }
 
 export const productStatus = pgEnum('product_status', [
   PRODUCT_STATUSES.DRAFT,
