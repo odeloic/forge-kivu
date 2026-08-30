@@ -11,7 +11,8 @@
 7. **Items point at `product_variants`, not `products`.** Price and sku live on the variant in the catalogue.
 8. **Adding an item requires a variant of a published product**, checked through the catalogue service. Draft and `not_available` products cannot enter a project — what is not publicly visible cannot be added.
 9. **A variant cannot be deleted from the catalogue while it sits in a live project list.** The fk is `restrict`; the catalogue surfaces it as a conflict. No cascade deletes across module boundaries. The catalogue's `not_available` status (catalogue spec, decision 7) is the normal way to retire a product, which makes this conflict rare.
-10. **Quantity is an integer ≥ 1.** Variants are discrete sellable units; fractional amounts have no meaning here.
+10. ~~**Quantity is an integer ≥ 1.** Variants are discrete sellable units; fractional amounts have no meaning here.~~
+    **Quantity is `numeric(12,2)` ≥ 0.01.** Variants carry a unit of measure; 12.5 m² is a valid amount. See workshop-projects-views.md, Unit of measure.
 11. **Deleting a project deletes its items and its BOQs.** Items cascade in-module; BOQ rows cascade at the database level (fk in the boq module). BOQs are snapshots of this project only — they have no life after it.
 
 ## Module layout
