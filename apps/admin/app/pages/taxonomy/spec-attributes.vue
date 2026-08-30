@@ -93,12 +93,6 @@ const confirmRemove = () =>
 
     <p v-else-if="!error" class="muted">No attributes yet.</p>
 
-    <p class="muted lede">
-      Leave the unit empty for anything that is not measured — Material, Finish,
-      Grade. A unit is a label the shop prints beside the value, not a
-      converter, so pick one and keep every product’s value in it.
-    </p>
-
     <SpecAttributeDialog
       v-if="dialog"
       :key="dialog.key"
@@ -128,10 +122,6 @@ const confirmRemove = () =>
   align-items: center;
   justify-content: space-between;
   gap: var(--space-8);
-}
-
-.lede {
-  font-size: var(--text-xs);
 }
 
 .slug-column {

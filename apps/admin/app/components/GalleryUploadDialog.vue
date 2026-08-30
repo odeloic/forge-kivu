@@ -83,7 +83,6 @@ watch(open, (isOpen) => {
           Release to upload {{ count || '' }}
           {{ count === 1 ? 'image' : 'images' }}
         </p>
-        <p class="muted hint">One gallery item is created per image</p>
       </template>
       <template v-else>
         <p class="lead">

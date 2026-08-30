@@ -138,10 +138,6 @@ const confirmRemove = () =>
   gap: var(--space-8);
 }
 
-.lede {
-  font-size: var(--text-xs);
-}
-
 .slug-column {
   width: 26%;
 }

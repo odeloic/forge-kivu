@@ -196,10 +196,6 @@ const count = computed(() => data.value?.length ?? 0)
   font-size: var(--text-xs);
 }
 
-.lede {
-  font-size: var(--text-xs);
-}
-
 .image-column {
   width: 4rem;
 }

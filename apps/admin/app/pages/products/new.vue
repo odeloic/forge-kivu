@@ -199,11 +199,6 @@ const priced = computed(
     </p>
 
     <template v-if="step === 1">
-      <p class="muted lede">
-        Saving this step creates the product as a draft with one unpriced
-        variant. Nothing is visible in the shop until you publish, and you can
-        leave after any step and pick the draft up from the products list.
-      </p>
       <ProductDetailsForm
         form-id="wizard-details"
         :product="null"
@@ -214,11 +209,6 @@ const priced = computed(
     </template>
 
     <template v-else-if="step === 2">
-      <p class="muted lede">
-        Options are the axes a buyer chooses along. Every combination of their
-        values becomes a variant on the next step, so name them here before you
-        price anything.
-      </p>
       <fieldset class="section">
         <legend>Options</legend>
         <label class="choice">
@@ -231,21 +221,10 @@ const priced = computed(
           @add="sections.addOption"
           @remove="sections.removeOption"
         />
-        <p v-else class="muted lede">
-          The draft keeps a single variant and you price it on the next step.
-          Adding options later replaces it.
-        </p>
       </fieldset>
     </template>
 
     <template v-else-if="step === 3">
-      <p class="muted lede">
-        {{
-          sections.optionNames.value.length
-            ? 'Every combination is listed and every one needs a price or it goes out as “price on request”. Remove the ones this supplier does not stock — a combination cannot appear twice.'
-            : 'No options, so there is one variant. Price it here.'
-        }}
-      </p>
       <fieldset class="section">
         <legend>Variants</legend>
         <ProductVariantsTable
@@ -253,21 +232,10 @@ const priced = computed(
           :option-names="sections.optionNames.value"
           :currency="currency"
         />
-        <p class="muted lede">
-          Price is optional — a variant without one shows as “Price on request”
-          in the shop. A variant can be given its own image on the product page,
-          once there is media to pick from.
-        </p>
       </fieldset>
     </template>
 
     <template v-else-if="step === 4">
-      <p class="muted lede">
-        Specs are what the shop filters on, media is what it shows. Both are
-        optional, and both save as one replacement set — this step calls two
-        endpoints, not one.
-      </p>
-
       <fieldset class="section">
         <legend>Specs</legend>
         <ProductSpecsTable
@@ -281,11 +249,6 @@ const priced = computed(
       <fieldset class="section">
         <legend>Media</legend>
         <div class="media-header">
-          <p class="muted lede">
-            {{ sections.media.value.length }}
-            {{ sections.media.value.length === 1 ? 'image' : 'images' }} · drag
-            a row to reorder
-          </p>
           <div class="spacer" />
           <UiButton variant="primary" @click="uploading = true">
             Add images
@@ -297,15 +260,10 @@ const priced = computed(
           @remove="sections.removeMedia"
           @move="sections.moveMedia"
         />
-        <p v-else class="muted lede">No images yet.</p>
       </fieldset>
     </template>
 
     <template v-else>
-      <p class="muted lede">
-        Everything below is already saved. Publishing only changes the status —
-        it does not save anything new, so a draft you leave here loses nothing.
-      </p>
       <fieldset class="section">
         <legend>Review</legend>
         <dl class="review">
@@ -361,10 +319,6 @@ const priced = computed(
             </dd>
           </div>
         </dl>
-        <p class="muted lede">
-          A published product can be pulled later with Unpublish; it never goes
-          back to draft.
-        </p>
       </fieldset>
     </template>
 
@@ -469,10 +423,6 @@ const priced = computed(
 
 .rail-state.state-next {
   color: var(--color-muted);
-}
-
-.lede {
-  font-size: var(--text-xs);
 }
 
 .section {

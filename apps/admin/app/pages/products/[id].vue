@@ -204,11 +204,6 @@ const updatedAt = computed(() =>
       <TabsContent value="variants" class="panel stack">
         <fieldset class="section">
           <legend>Options</legend>
-          <p class="muted lede">
-            Saving replaces the whole option set. Removing a value here orphans
-            every variant built on it, so save options first and rebuild the
-            table below.
-          </p>
           <ProductOptionsFields
             v-model="sections.options.value"
             @add="sections.addOption"
@@ -227,10 +222,6 @@ const updatedAt = computed(() =>
 
         <fieldset class="section">
           <legend>Variants</legend>
-          <p class="muted lede">
-            Every variant has to name a value for every option and no
-            combination may repeat, so this saves as one set or not at all.
-          </p>
           <ProductVariantsTable
             v-model="sections.variants.value"
             :option-names="sections.optionNames.value"
@@ -252,11 +243,6 @@ const updatedAt = computed(() =>
       <TabsContent value="specs" class="panel">
         <fieldset class="section">
           <legend>Specs</legend>
-          <p class="muted lede">
-            One value per attribute, and the attribute list comes from Taxonomy
-            › Spec attributes. These are what the shop’s filter sidebar is built
-            from.
-          </p>
           <ProductSpecsTable
             v-model="sections.specs.value"
             :attributes="specAttributes.data.value ?? []"
@@ -279,11 +265,6 @@ const updatedAt = computed(() =>
         <fieldset class="section">
           <legend>Media</legend>
           <div class="media-header">
-            <p class="muted lede">
-              {{ sections.media.value.length }}
-              {{ sections.media.value.length === 1 ? 'image' : 'images' }} ·
-              drag a row to reorder
-            </p>
             <div class="spacer" />
             <UiButton variant="primary" @click="uploading = true">
               Add images
@@ -296,13 +277,6 @@ const updatedAt = computed(() =>
             @remove="sections.removeMedia"
             @move="sections.moveMedia"
           />
-          <p v-else class="muted lede">No images yet.</p>
-
-          <span class="faint lede">
-            Dropping a row saves nothing on its own — the first image is the one
-            the shop lists, and Save media keeps the order. Removing an image
-            keeps the file in Media.
-          </span>
 
           <div class="actions">
             <UiButton
@@ -423,14 +397,6 @@ const updatedAt = computed(() =>
   display: flex;
   align-items: center;
   gap: var(--space-6);
-}
-
-.lede {
-  font-size: var(--text-xs);
-}
-
-.faint {
-  color: var(--color-faint);
 }
 
 .actions {
