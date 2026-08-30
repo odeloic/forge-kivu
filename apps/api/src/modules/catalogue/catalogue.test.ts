@@ -1,8 +1,8 @@
 import { eq } from 'drizzle-orm'
-import { beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { app } from '../../app'
-import { db } from '../../db'
+import { client, db } from '../../db'
 import { env } from '../../env'
 import {
   jsonRequest,
@@ -18,6 +18,7 @@ import {
 import { ROLES } from '@forge-kivu/types'
 import { media } from '../media/media.tables'
 import { suppliers } from '../suppliers/suppliers.tables'
+import { getVariantRef, getVariantRefs } from './catalogue.service'
 import {
   productMedia,
   productOptions,
@@ -130,6 +131,16 @@ const deleteSupplier = (id: string, cookie: string) =>
 
 const deleteAttribute = (id: string, cookie: string) =>
   app.request(`/admin/spec-attributes/${id}`, write('DELETE', cookie))
+
+const countQueries = async (run: () => Promise<unknown>): Promise<number> => {
+  const spy = vi.spyOn(client, 'unsafe')
+  try {
+    await run()
+    return spy.mock.calls.length
+  } finally {
+    spy.mockRestore()
+  }
+}
 
 const createdId = async (res: Response, what: string): Promise<string> => {
   if (res.status !== 201) {
@@ -1548,5 +1559,535 @@ describe('delete a product', () => {
     expect(unknown.status).toBe(404)
     expect(workshop.status).toBe(401)
     expect(await db.select().from(products)).toHaveLength(1)
+  })
+})
+
+describe('variant references', () => {
+  const optionValueIdsOf = (detail: Detail): string[] =>
+    detail.options[0]?.values.map((row) => row.id) ?? []
+
+  const colouredProduct = async (
+    admin: string,
+    data: Seed,
+    values: string[],
+  ): Promise<Detail> => {
+    const id = await createProduct(admin, data)
+    const withOptions = await detailOf(
+      await putOptions(id, admin, { options: [{ name: 'Color', values }] }),
+    )
+    return withOptions
+  }
+
+  it('enriches a variant with its supplier, category and image', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const data = await seed(admin)
+    const uploader = await loginAs(UPLOADER)
+    const cover = await createReadyMedia(uploader)
+    const spare = await createReadyMedia(uploader)
+    const ownImage = await createReadyMedia(uploader)
+
+    const withOptions = await colouredProduct(admin, data, ['Charcoal', 'Sand'])
+    const [charcoalValue, sandValue] = optionValueIdsOf(withOptions)
+    const withVariants = await detailOf(
+      await putVariants(withOptions.id, admin, {
+        variants: [
+          {
+            sku: 'WC-CH',
+            price: 12,
+            imageMediaId: ownImage,
+            optionValueIds: [charcoalValue],
+          },
+          { sku: 'WC-SA', price: 14, optionValueIds: [sandValue] },
+        ],
+      }),
+    )
+    const attached = await detailOf(
+      await putMedia(withOptions.id, admin, { mediaIds: [cover, spare] }),
+    )
+
+    const [charcoal, sand] = withVariants.variants
+    const refs = await getVariantRefs([
+      charcoal?.id as string,
+      sand?.id as string,
+    ])
+
+    expect(refs.get(charcoal?.id as string)).toMatchObject({
+      id: charcoal?.id,
+      sku: 'WC-CH',
+      price: 12,
+      label: 'Charcoal',
+      product: {
+        id: withOptions.id,
+        name: 'White Cement Tile',
+        status: 'draft',
+      },
+      supplier: { id: data.supplierId, name: 'Kivu Tiles', slug: 'kivu-tiles' },
+      category: {
+        id: data.floorTiles,
+        name: 'Floor Tiles',
+        slug: 'floor-tiles',
+      },
+      imageUrl: charcoal?.imageUrl,
+    })
+    expect(refs.get(sand?.id as string)?.imageUrl).toBe(attached.media[0]?.url)
+  })
+
+  it('falls back to the first product media and then to no image', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const data = await seed(admin)
+    const uploader = await loginAs(UPLOADER)
+    const first = await createReadyMedia(uploader)
+    const second = await createReadyMedia(uploader)
+
+    const id = await createProduct(admin, data)
+    const bare = await detailOf(await getProduct(id, admin))
+    const variantId = bare.variants[0]?.id as string
+
+    const withoutMedia = await getVariantRef(variantId)
+    const attached = await detailOf(
+      await putMedia(id, admin, { mediaIds: [first, second] }),
+    )
+    const withMedia = await getVariantRef(variantId)
+    const reordered = await detailOf(
+      await putMedia(id, admin, { mediaIds: [second, first] }),
+    )
+    const afterReorder = await getVariantRef(variantId)
+
+    expect(withoutMedia?.imageUrl).toBeNull()
+    expect(withoutMedia?.label).toBeNull()
+    expect(withMedia?.imageUrl).toBe(attached.media[0]?.url)
+    expect(afterReorder?.imageUrl).toBe(reordered.media[0]?.url)
+    expect(afterReorder?.imageUrl).not.toBe(withMedia?.imageUrl)
+  })
+
+  it('resolves a variant of a retired product with its status', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const data = await seed(admin)
+    const id = await createProduct(admin, data)
+    await publishProduct(id, admin)
+    const retired = await detailOf(await unpublishProduct(id, admin))
+
+    const ref = await getVariantRef(retired.variants[0]?.id as string)
+
+    expect(ref).toMatchObject({
+      product: { id, status: 'not_available' },
+      supplier: { slug: 'kivu-tiles' },
+      category: { slug: 'floor-tiles' },
+    })
+  })
+
+  it('loads ten variants in the same number of queries as one', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const data = await seed(admin)
+    const withOptions = await colouredProduct(
+      admin,
+      data,
+      Array.from({ length: 10 }, (_, index) => `Shade ${index}`),
+    )
+    const withVariants = await detailOf(
+      await putVariants(withOptions.id, admin, {
+        variants: optionValueIdsOf(withOptions).map((valueId, index) => ({
+          sku: `WC-${index}`,
+          price: index + 1,
+          optionValueIds: [valueId],
+        })),
+      }),
+    )
+    const ids = withVariants.variants.map((row) => row.id)
+
+    const one = await countQueries(() => getVariantRefs(ids.slice(0, 1)))
+    const ten = await countQueries(() => getVariantRefs(ids))
+
+    expect(ids).toHaveLength(10)
+    expect(ten).toBe(one)
+    expect(ten).toBeLessThan(10)
+  })
+
+  it('returns null for an unknown variant', async () => {
+    expect(await getVariantRef(crypto.randomUUID())).toBeNull()
+    expect(await getVariantRefs([])).toEqual(new Map())
+  })
+})
+
+describe('text search on the public list', () => {
+  const facets = (query = '') =>
+    app.request(`/catalogue/products/facets${query}`)
+
+  const published = async (
+    admin: string,
+    data: Seed,
+    overrides: Record<string, unknown>,
+  ): Promise<string> => {
+    const id = await createProduct(admin, data, overrides)
+    await publishProduct(id, admin)
+    return id
+  }
+
+  const slugsFor = async (query: string): Promise<string[]> => {
+    const body = (await (await browse(query)).json()) as Page
+    return body.items.map((item) => item.slug).sort()
+  }
+
+  it('matches a product name in any case and narrows with the other filters', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const data = await seed(admin)
+    await showSupplier(data.supplierId)
+    await showSupplier(data.otherSupplierId)
+
+    await published(admin, data, {})
+    await published(admin, data, {
+      slug: 'grey-cement',
+      name: 'Grey CEMENT Slab',
+      categoryId: data.tiles,
+    })
+    await published(admin, data, {
+      slug: 'lake-cement',
+      name: 'Lake Cement Block',
+      supplierId: data.otherSupplierId,
+    })
+    await published(admin, data, {
+      slug: 'sandstone',
+      name: 'Sandstone Panel',
+    })
+
+    expect(await slugsFor('?q=cement')).toEqual([
+      'grey-cement',
+      'lake-cement',
+      'white-cement',
+    ])
+    expect(await slugsFor('?q=CEMENT')).toEqual([
+      'grey-cement',
+      'lake-cement',
+      'white-cement',
+    ])
+    expect(
+      await slugsFor('?q=cement&supplier=kivu-tiles&category=floor-tiles'),
+    ).toEqual(['white-cement'])
+    expect(await slugsFor('?q=nothing-like-this')).toEqual([])
+  })
+
+  it('matches a variant sku', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const data = await seed(admin)
+    await showSupplier(data.supplierId)
+
+    const id = await createProduct(admin, data, {
+      slug: 'sandstone',
+      name: 'Sandstone Panel',
+    })
+    await putVariants(id, admin, { variants: [{ sku: 'CEM-42', price: 3 }] })
+    await publishProduct(id, admin)
+    await published(admin, data, {})
+
+    expect(await slugsFor('?q=cem-4')).toEqual(['sandstone'])
+  })
+
+  it('rejects an empty and an over-long search', async () => {
+    const empty = await browse('?q=')
+    const tooLong = await browse(`?q=${'a'.repeat(101)}`)
+    const longest = await browse(`?q=${'a'.repeat(100)}`)
+
+    expect(empty.status).toBe(400)
+    expect(tooLong.status).toBe(400)
+    expect(longest.status).toBe(200)
+  })
+
+  it('matches % and _ literally instead of as wildcards', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const data = await seed(admin)
+    await showSupplier(data.supplierId)
+
+    await published(admin, data, {
+      slug: 'percent-tile',
+      name: 'Cement 50% Grey',
+    })
+    await published(admin, data, {
+      slug: 'plain-tile',
+      name: 'Cement 5012 Grey',
+    })
+    await published(admin, data, { slug: 'under-tile', name: 'Tile_A' })
+    await published(admin, data, { slug: 'other-tile', name: 'TileXA' })
+
+    expect(await slugsFor(`?q=${encodeURIComponent('50%')}`)).toEqual([
+      'percent-tile',
+    ])
+    expect(await slugsFor(`?q=${encodeURIComponent('Tile_')}`)).toEqual([
+      'under-tile',
+    ])
+    expect(await slugsFor(`?q=${encodeURIComponent('Tile')}`)).toEqual([
+      'other-tile',
+      'under-tile',
+    ])
+  })
+
+  it('computes the facets over the searched set', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const data = await seed(admin)
+    await showSupplier(data.supplierId)
+    await showSupplier(data.otherSupplierId)
+
+    const cement = await published(admin, data, {})
+    await putSpecs(cement, admin, {
+      specs: [{ attributeId: data.material, value: 'Ceramic' }],
+    })
+    const sandstone = await published(admin, data, {
+      slug: 'sandstone',
+      name: 'Sandstone Panel',
+      supplierId: data.otherSupplierId,
+    })
+    await putSpecs(sandstone, admin, {
+      specs: [{ attributeId: data.material, value: 'Stone' }],
+    })
+
+    const body = (await (await facets('?q=cement')).json()) as {
+      suppliers: { slug: string; count: number }[]
+      attributes: { slug: string; values: { value: string }[] }[]
+    }
+
+    expect(body.suppliers).toEqual([
+      { slug: 'kivu-tiles', name: 'Kivu Tiles', count: 1 },
+    ])
+    expect(body.attributes).toMatchObject([
+      { slug: 'material', values: [{ value: 'Ceramic', count: 1 }] },
+    ])
+  })
+})
+
+describe('the public variant list', () => {
+  type VariantRow = {
+    variantId: string
+    sku: string | null
+    price: number | null
+    label: string | null
+    product: { id: string; name: string; slug: string; status: string }
+    supplier: { id: string; name: string; slug: string }
+    category: { id: string; name: string; slug: string }
+    imageUrl: string | null
+  }
+
+  type VariantPage = {
+    items: VariantRow[]
+    page: number
+    pageSize: number
+    total: number
+  }
+
+  const browseVariants = (query = '') =>
+    app.request(`/catalogue/variants${query}`)
+
+  const pageOf = async (query = ''): Promise<VariantPage> =>
+    (await (await browseVariants(query)).json()) as VariantPage
+
+  const withOptionValues = async (
+    admin: string,
+    data: Seed,
+    values: string[],
+    overrides: Record<string, unknown> = {},
+  ): Promise<Detail> => {
+    const id = await createProduct(admin, data, overrides)
+    return detailOf(
+      await putOptions(id, admin, { options: [{ name: 'Color', values }] }),
+    )
+  }
+
+  it('serves one anonymous row per variant with its supplier, category and image', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const data = await seed(admin)
+    await showSupplier(data.supplierId)
+    const cover = await createReadyMedia(await loginAs(UPLOADER))
+
+    const withOptions = await withOptionValues(admin, data, [
+      'Charcoal',
+      'Sand',
+      'Clay',
+    ])
+    const valueIds = withOptions.options[0]?.values.map((row) => row.id) ?? []
+    await putVariants(withOptions.id, admin, {
+      variants: valueIds.map((valueId, index) => ({
+        sku: `WC-${index}`,
+        price: index + 10,
+        optionValueIds: [valueId],
+      })),
+    })
+    const attached = await detailOf(
+      await putMedia(withOptions.id, admin, { mediaIds: [cover] }),
+    )
+    await publishProduct(withOptions.id, admin)
+
+    const slab = await createProduct(admin, data, {
+      slug: 'cement-slab',
+      name: 'Cement Slab',
+      categoryId: data.tiles,
+    })
+    await putVariants(slab, admin, { variants: [{ sku: 'CS-1', price: 5 }] })
+    await publishProduct(slab, admin)
+
+    const res = await browseVariants('?q=cement')
+    const body = (await res.json()) as VariantPage
+
+    expect(res.status).toBe(200)
+    expect(body).toMatchObject({ page: 1, pageSize: 40, total: 4 })
+    expect(
+      body.items.filter((row) => row.product.id === withOptions.id),
+    ).toHaveLength(3)
+    expect(body.items.find((row) => row.sku === 'WC-0')).toEqual({
+      variantId: attached.variants[0]?.id,
+      sku: 'WC-0',
+      price: 10,
+      label: 'Charcoal',
+      product: {
+        id: withOptions.id,
+        name: 'White Cement Tile',
+        slug: 'white-cement',
+        status: 'published',
+      },
+      supplier: { id: data.supplierId, name: 'Kivu Tiles', slug: 'kivu-tiles' },
+      category: {
+        id: data.floorTiles,
+        name: 'Floor Tiles',
+        slug: 'floor-tiles',
+      },
+      imageUrl: attached.media[0]?.url,
+    })
+    expect(body.items.find((row) => row.sku === 'CS-1')).toMatchObject({
+      label: null,
+      imageUrl: null,
+      product: { slug: 'cement-slab' },
+      category: { slug: 'tiles' },
+    })
+  })
+
+  it('leaves out variants of draft, retired and hidden-supplier products', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const data = await seed(admin)
+    await showSupplier(data.supplierId)
+
+    const live = await createProduct(admin, data)
+    await putVariants(live, admin, { variants: [{ sku: 'LIVE-1' }] })
+    await publishProduct(live, admin)
+
+    const draft = await createProduct(admin, data, { slug: 'draft-tile' })
+    await putVariants(draft, admin, { variants: [{ sku: 'DRAFT-1' }] })
+
+    const retired = await createProduct(admin, data, { slug: 'retired-tile' })
+    await putVariants(retired, admin, { variants: [{ sku: 'RETIRED-1' }] })
+    await publishProduct(retired, admin)
+    await unpublishProduct(retired, admin)
+
+    const hidden = await createProduct(admin, data, {
+      slug: 'hidden-tile',
+      supplierId: data.otherSupplierId,
+    })
+    await putVariants(hidden, admin, { variants: [{ sku: 'HIDDEN-1' }] })
+    await publishProduct(hidden, admin)
+
+    const body = await pageOf()
+
+    expect(body.items.map((row) => row.sku)).toEqual(['LIVE-1'])
+    expect(body.total).toBe(1)
+  })
+
+  it('keeps a variant that has no price', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const data = await seed(admin)
+    await showSupplier(data.supplierId)
+
+    const withOptions = await withOptionValues(admin, data, [
+      'Charcoal',
+      'Sand',
+    ])
+    const valueIds = withOptions.options[0]?.values.map((row) => row.id) ?? []
+    await putVariants(withOptions.id, admin, {
+      variants: [
+        { sku: 'NO-PRICE', optionValueIds: [valueIds[0] as string] },
+        { sku: 'PRICED', price: 9, optionValueIds: [valueIds[1] as string] },
+      ],
+    })
+    await publishProduct(withOptions.id, admin)
+
+    const body = await pageOf()
+
+    expect(body.items).toMatchObject([
+      { sku: 'NO-PRICE', price: null, label: 'Charcoal' },
+      { sku: 'PRICED', price: 9, label: 'Sand' },
+    ])
+  })
+
+  it('caps the page size, serves the next slice and rejects page zero', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const data = await seed(admin)
+    await showSupplier(data.supplierId)
+
+    const values = Array.from({ length: 41 }, (_, index) => `Shade ${index}`)
+    const withOptions = await withOptionValues(admin, data, values)
+    const valueIds = withOptions.options[0]?.values.map((row) => row.id) ?? []
+    await putVariants(withOptions.id, admin, {
+      variants: valueIds.map((valueId, index) => ({
+        sku: `WC-${index}`,
+        optionValueIds: [valueId],
+      })),
+    })
+    await publishProduct(withOptions.id, admin)
+
+    const first = await pageOf()
+    const second = await pageOf('?page=2')
+    const zero = await browseVariants('?page=0')
+
+    expect(first.items).toHaveLength(40)
+    expect(first.pageSize).toBe(40)
+    expect(first.total).toBe(41)
+    expect(second.items).toHaveLength(1)
+    expect(second.page).toBe(2)
+    expect(second.total).toBe(41)
+    expect(
+      first.items
+        .map((row) => row.variantId)
+        .includes(second.items[0]?.variantId as string),
+    ).toBe(false)
+    expect(zero.status).toBe(400)
+  })
+
+  it('filters by category, supplier and a variant sku', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const data = await seed(admin)
+    await showSupplier(data.supplierId)
+    await showSupplier(data.otherSupplierId)
+
+    const floor = await createProduct(admin, data)
+    await putVariants(floor, admin, { variants: [{ sku: 'FLOOR-1' }] })
+    await publishProduct(floor, admin)
+
+    const wall = await createProduct(admin, data, {
+      slug: 'wall-tile',
+      name: 'Wall Tile',
+      categoryId: data.tiles,
+    })
+    await putVariants(wall, admin, { variants: [{ sku: 'WALL-1' }] })
+    await publishProduct(wall, admin)
+
+    const lake = await createProduct(admin, data, {
+      slug: 'lake-slab',
+      name: 'Lake Slab',
+      supplierId: data.otherSupplierId,
+    })
+    await putVariants(lake, admin, { variants: [{ sku: 'LAKE-1' }] })
+    await publishProduct(lake, admin)
+
+    const skusFor = async (query: string): Promise<string[]> =>
+      (await pageOf(query)).items.map((row) => row.sku as string).sort()
+
+    expect(await skusFor('?category=tiles')).toEqual([
+      'FLOOR-1',
+      'LAKE-1',
+      'WALL-1',
+    ])
+    expect(await skusFor('?category=floor-tiles')).toEqual([
+      'FLOOR-1',
+      'LAKE-1',
+    ])
+    expect(await skusFor('?supplier=lake-stone')).toEqual(['LAKE-1'])
+    expect(await skusFor('?q=wall-1')).toEqual(['WALL-1'])
+    expect(await skusFor('?q=lake&supplier=lake-stone')).toEqual(['LAKE-1'])
+    expect(await skusFor('?category=nothing-here')).toEqual([])
   })
 })

@@ -13,6 +13,7 @@ import {
   setSpecsSchema,
   setVariantsSchema,
   updateProductSchema,
+  variantListQuerySchema,
 } from './catalogue.schemas'
 import {
   createProduct,
@@ -21,6 +22,7 @@ import {
   getPublished,
   listForAdmin,
   listPublished,
+  listPublishedVariants,
   publish,
   removeProduct,
   setMedia,
@@ -39,6 +41,9 @@ export const catalogueRoutes = new Hono()
     '/products/facets',
     zValidator('query', publicListQuerySchema),
     async (c) => c.json(await getFacets(c.req.valid('query'))),
+  )
+  .get('/variants', zValidator('query', variantListQuerySchema), async (c) =>
+    c.json(await listPublishedVariants(c.req.valid('query'))),
   )
   .get(
     '/products/:supplierSlug/:productSlug',

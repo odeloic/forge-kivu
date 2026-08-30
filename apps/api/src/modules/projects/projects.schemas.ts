@@ -68,7 +68,29 @@ export const updateProjectSchema = z
   .partial()
   .refine(atLeastOneField, { message: 'At least one field is required' })
 
+export const PROJECT_SORTS = {
+  UPDATED_AT: 'updatedAt',
+  CREATED_AT: 'createdAt',
+} as const
+
+export type ProjectSort = (typeof PROJECT_SORTS)[keyof typeof PROJECT_SORTS]
+
+export const listQuerySchema = z.object({
+  projectType: projectTypeSchema.optional(),
+  phase: phaseSchema.optional(),
+  sort: z
+    .enum([PROJECT_SORTS.UPDATED_AT, PROJECT_SORTS.CREATED_AT])
+    .default(PROJECT_SORTS.UPDATED_AT),
+})
+
 export const projectIdParamSchema = z.object({ id: z.uuid() })
+
+export const projectPhaseParamSchema = z.object({
+  id: z.uuid(),
+  phase: phaseSchema,
+})
+
+export const setPhaseSchema = z.object({ completedOn: dateSchema })
 
 export const projectItemParamSchema = z.object({
   id: z.uuid(),
@@ -82,3 +104,5 @@ export const setItemSchema = z.object({
 export type CreateProjectInput = z.infer<typeof createProjectSchema>
 export type UpdateProjectInput = z.infer<typeof updateProjectSchema>
 export type SetItemInput = z.infer<typeof setItemSchema>
+export type ListProjectsQuery = z.infer<typeof listQuerySchema>
+export type SetPhaseInput = z.infer<typeof setPhaseSchema>

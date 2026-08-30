@@ -25,6 +25,7 @@ export const CATALOGUE_LIMITS = {
   variantOptions: 10,
   specs: 50,
   media: 20,
+  search: 100,
 } as const
 
 export const catalogueFields = {
@@ -47,6 +48,7 @@ export const catalogueFields = {
     .trim()
     .min(1, 'Value is required.')
     .max(CATALOGUE_LIMITS.specValue),
+  search: z.string().trim().min(1).max(CATALOGUE_LIMITS.search),
 }
 
 const atLeastOneField = (patch: object): boolean =>

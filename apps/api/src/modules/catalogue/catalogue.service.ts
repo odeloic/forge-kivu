@@ -6,6 +6,7 @@ import {
   eq,
   exists,
   gte,
+  ilike,
   inArray,
   lte,
   max,
@@ -17,7 +18,7 @@ import {
 import { db } from '../../db'
 import { isReferenceViolation, isUniqueViolation } from '../../db/errors'
 import { AppError } from '../../lib/errors'
-import { getPublicUrl, getReady } from '../media/media.service'
+import { getPublicUrl, getReady, listReady } from '../media/media.service'
 import {
   getById as getSupplierById,
   getBySlug as getSupplierBySlug,
@@ -39,6 +40,7 @@ import type {
   SetSpecsInput,
   SetVariantsInput,
   UpdateProductInput,
+  VariantListQuery,
 } from './catalogue.schemas'
 import {
   PRODUCT_STATUSES,
@@ -119,6 +121,8 @@ export type ProductPage = {
 }
 
 const PAGE_SIZE = 20
+
+const VARIANT_PAGE_SIZE = 40
 
 const toRef = (row: ProductRef): ProductRef => ({
   id: row.id,
@@ -697,11 +701,85 @@ export type VariantRef = {
   price: number | null
   label: string | null
   product: { id: string; name: string; status: ProductStatus }
+  supplier: ProductRef
+  category: ProductRef
+  imageUrl: string | null
 }
+
+export type VariantListItem = {
+  variantId: string
+  sku: string | null
+  price: number | null
+  label: string | null
+  product: { id: string; name: string; slug: string; status: ProductStatus }
+  supplier: ProductRef
+  category: ProductRef
+  imageUrl: string | null
+}
+
+export type VariantPage = {
+  items: VariantListItem[]
+  page: number
+  pageSize: number
+  total: number
+}
+
+const coverMediaId = sql<string | null>`${db
+  .select({ mediaId: productMedia.mediaId })
+  .from(productMedia)
+  .where(eq(productMedia.productId, products.id))
+  .orderBy(asc(productMedia.sortOrder))
+  .limit(1)}`
+
+const variantSource = () =>
+  db
+    .select({
+      id: productVariants.id,
+      sku: productVariants.sku,
+      price: productVariants.price,
+      imageMediaId: productVariants.imageMediaId,
+      coverMediaId,
+      productId: products.id,
+      productName: products.name,
+      productSlug: products.slug,
+      productStatus: products.status,
+      supplierId: products.supplierId,
+      categoryId: products.categoryId,
+    })
+    .from(productVariants)
+    .innerJoin(products, eq(products.id, productVariants.productId))
+
+type VariantRow = Awaited<ReturnType<typeof variantSource>>[number]
+
+const variantImageUrls = async (
+  rows: VariantRow[],
+): Promise<Map<string, string>> => {
+  const mediaIds = [
+    ...new Set(
+      rows
+        .flatMap((row) => [row.imageMediaId, row.coverMediaId])
+        .filter((id): id is string => id !== null),
+    ),
+  ]
+
+  const ready = await listReady(mediaIds)
+
+  return new Map(ready.map((row) => [row.id, getPublicUrl(row.key)]))
+}
+
+const variantImageUrl = (
+  row: VariantRow,
+  urls: Map<string, string>,
+): string | null =>
+  (row.imageMediaId ? urls.get(row.imageMediaId) : undefined) ??
+  (row.coverMediaId ? urls.get(row.coverMediaId) : undefined) ??
+  null
 
 const variantLabels = async (
   variantIds: string[],
 ): Promise<Map<string, string>> => {
+  if (variantIds.length === 0) return new Map()
+
   const rows = await db
     .select({
       variantId: variantOptionValues.variantId,
@@ -732,21 +810,14 @@ export const getVariantRefs = async (
 ): Promise<Map<string, VariantRef>> => {
   if (variantIds.length === 0) return new Map()
 
-  const [rows, labels] = await Promise.all([
-    db
-      .select({
-        id: productVariants.id,
-        sku: productVariants.sku,
-        price: productVariants.price,
-        productId: products.id,
-        productName: products.name,
-        productStatus: products.status,
-      })
-      .from(productVariants)
-      .innerJoin(products, eq(products.id, productVariants.productId))
-      .where(inArray(productVariants.id, variantIds)),
+  const [rows, labels, supplierById, categoryById] = await Promise.all([
+    variantSource().where(inArray(productVariants.id, variantIds)),
     variantLabels(variantIds),
+    supplierRefs(false),
+    getTree().then((tree) => collectCategories(tree, new Map())),
   ])
+
+  const imageUrls = await variantImageUrls(rows)
 
   return new Map(
     rows.map((row) => [
@@ -761,6 +832,9 @@ export const getVariantRefs = async (
           name: row.productName,
           status: row.productStatus,
         },
+        supplier: requireRef(supplierById, row.supplierId),
+        category: requireRef(categoryById, row.categoryId),
+        imageUrl: variantImageUrl(row, imageUrls),
       },
     ]),
   )
@@ -825,12 +899,32 @@ type DimensionOmit = {
   specSlug?: string
 }
 
+const likePattern = (value: string): string =>
+  `%${value.replace(/[\\%_]/g, '\\$&')}%`
+
 const publicConditions = (
   scope: PublicScope,
   query: PublicListQuery,
   omit: DimensionOmit = {},
 ): SQL[] | null => {
   const conditions: SQL[] = [eq(products.status, PRODUCT_STATUSES.PUBLISHED)]
+
+  if (query.q) {
+    const pattern = likePattern(query.q)
+    conditions.push(
+      sql`(${ilike(products.name, pattern)} or ${exists(
+        db
+          .select({ matched: sql`1` })
+          .from(productVariants)
+          .where(
+            and(
+              eq(productVariants.productId, products.id),
+              ilike(productVariants.sku, pattern),
+            ),
+          ),
+      )})`,
+    )
+  }
 
   if (query.supplier && !omit.supplier) {
     const match = [...scope.supplierById.values()].find(
@@ -934,6 +1028,97 @@ export const listPublished = async (
     items: await buildListItems(rows, supplierById, categoryById),
     page,
     pageSize: PAGE_SIZE,
+    total: totals[0]?.value ?? 0,
+  }
+}
+
+const emptyVariantPage = (page: number): VariantPage => ({
+  items: [],
+  page,
+  pageSize: VARIANT_PAGE_SIZE,
+  total: 0,
+})
+
+export const listPublishedVariants = async (
+  query: VariantListQuery,
+): Promise<VariantPage> => {
+  const page = query.page ?? 1
+
+  const [supplierById, tree] = await Promise.all([
+    supplierRefs(true),
+    getTree(),
+  ])
+  const categoryById = collectCategories(tree, new Map())
+
+  const conditions = publicConditions(
+    { supplierById, tree, attributeIdBySlug: new Map() },
+    {
+      q: undefined,
+      category: query.category,
+      supplier: query.supplier,
+      priceMin: undefined,
+      priceMax: undefined,
+      page: query.page,
+      specs: [],
+    },
+  )
+  if (!conditions) return emptyVariantPage(page)
+
+  const pattern = query.q ? likePattern(query.q) : null
+
+  const where = and(
+    ...conditions,
+    ...(pattern
+      ? [
+          sql`(${ilike(products.name, pattern)} or ${ilike(
+            productVariants.sku,
+            pattern,
+          )})`,
+        ]
+      : []),
+  )
+
+  const [totals, rows] = await Promise.all([
+    db
+      .select({ value: count() })
+      .from(productVariants)
+      .innerJoin(products, eq(products.id, productVariants.productId))
+      .where(where),
+    variantSource()
+      .where(where)
+      .orderBy(
+        desc(products.createdAt),
+        asc(products.id),
+        asc(productVariants.sortOrder),
+        asc(productVariants.id),
+      )
+      .limit(VARIANT_PAGE_SIZE)
+      .offset((page - 1) * VARIANT_PAGE_SIZE),
+  ])
+
+  const [labels, imageUrls] = await Promise.all([
+    variantLabels(rows.map((row) => row.id)),
+    variantImageUrls(rows),
+  ])
+
+  return {
+    items: rows.map((row) => ({
+      variantId: row.id,
+      sku: row.sku,
+      price: row.price,
+      label: labels.get(row.id) ?? null,
+      product: {
+        id: row.productId,
+        name: row.productName,
+        slug: row.productSlug,
+        status: row.productStatus,
+      },
+      supplier: requireRef(supplierById, row.supplierId),
+      category: requireRef(categoryById, row.categoryId),
+      imageUrl: variantImageUrl(row, imageUrls),
+    })),
+    page,
+    pageSize: VARIANT_PAGE_SIZE,
     total: totals[0]?.value ?? 0,
   }
 }

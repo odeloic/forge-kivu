@@ -1,4 +1,12 @@
-import { and, asc, desc, eq } from 'drizzle-orm'
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  getTableColumns,
+  inArray,
+} from 'drizzle-orm'
 
 import { db } from '../../db'
 import { AppError } from '../../lib/errors'
@@ -7,11 +15,24 @@ import {
   getVariantRefs,
   PRODUCT_STATUSES,
   type ProductStatus,
+  type VariantRef,
 } from '../catalogue/catalogue.service'
-import type { CreateProjectInput, UpdateProjectInput } from './projects.schemas'
-import { projectItems, projects } from './projects.tables'
+import {
+  type CreateProjectInput,
+  type ListProjectsQuery,
+  PROJECT_SORTS,
+  type UpdateProjectInput,
+} from './projects.schemas'
+import {
+  projectItems,
+  projectPhases,
+  projects,
+  type ProjectPhase,
+} from './projects.tables'
 
 export type Project = typeof projects.$inferSelect
+
+export type ProjectSummary = Project & { itemCount: number }
 
 export type ProjectItem = {
   variantId: string
@@ -20,9 +41,20 @@ export type ProjectItem = {
   price: number | null
   label: string | null
   product: { id: string; name: string; status: ProductStatus }
+  category: { id: string; name: string; slug: string }
+  supplier: { id: string; name: string; slug: string }
+  imageUrl: string | null
 }
 
-export type ProjectDetail = Project & { items: ProjectItem[] }
+export type ProjectPhaseCompletion = {
+  phase: ProjectPhase
+  completedOn: string
+}
+
+export type ProjectDetail = Project & {
+  items: ProjectItem[]
+  phases: ProjectPhaseCompletion[]
+}
 
 const ownedBy = (id: string, ownerId: string) =>
   and(eq(projects.id, id), eq(projects.ownerId, ownerId))
@@ -46,6 +78,32 @@ const requireOwned = async (id: string, ownerId: string): Promise<Project> => {
   return row
 }
 
+const toItem = (
+  row: { variantId: string; quantity: number },
+  ref: VariantRef,
+): ProjectItem => ({
+  variantId: row.variantId,
+  quantity: row.quantity,
+  sku: ref.sku,
+  price: ref.price,
+  label: ref.label,
+  product: ref.product,
+  category: ref.category,
+  supplier: ref.supplier,
+  imageUrl: ref.imageUrl,
+})
+
+const requireRef = (
+  refs: Map<string, VariantRef>,
+  variantId: string,
+): VariantRef => {
+  const ref = refs.get(variantId)
+  if (!ref) {
+    throw new Error(`projects: item references a missing variant ${variantId}`)
+  }
+  return ref
+}
+
 const loadItems = async (projectId: string): Promise<ProjectItem[]> => {
   const rows = await db
     .select()
@@ -57,23 +115,20 @@ const loadItems = async (projectId: string): Promise<ProjectItem[]> => {
 
   const refs = await getVariantRefs(rows.map((row) => row.variantId))
 
-  return rows.map((row) => {
-    const ref = refs.get(row.variantId)
-    if (!ref) {
-      throw new Error(
-        `projects: item references a missing variant ${row.variantId}`,
-      )
-    }
-    return {
-      variantId: row.variantId,
-      quantity: row.quantity,
-      sku: ref.sku,
-      price: ref.price,
-      label: ref.label,
-      product: ref.product,
-    }
-  })
+  return rows.map((row) => toItem(row, requireRef(refs, row.variantId)))
 }
+
+const loadPhases = async (
+  projectId: string,
+): Promise<ProjectPhaseCompletion[]> =>
+  db
+    .select({
+      phase: projectPhases.phase,
+      completedOn: projectPhases.completedOn,
+    })
+    .from(projectPhases)
+    .where(eq(projectPhases.projectId, projectId))
+    .orderBy(asc(projectPhases.phase))
 
 export const create = async (
   ownerId: string,
@@ -105,12 +160,32 @@ export const update = async (
   return row
 }
 
-export const list = async (ownerId: string): Promise<Project[]> =>
-  db
-    .select()
+export const list = async (
+  ownerId: string,
+  query: ListProjectsQuery,
+): Promise<ProjectSummary[]> => {
+  const conditions = [eq(projects.ownerId, ownerId)]
+  if (query.projectType) {
+    conditions.push(eq(projects.projectType, query.projectType))
+  }
+  if (query.phase) conditions.push(eq(projects.phase, query.phase))
+
+  const sortColumn =
+    query.sort === PROJECT_SORTS.CREATED_AT
+      ? projects.createdAt
+      : projects.updatedAt
+
+  return db
+    .select({
+      ...getTableColumns(projects),
+      itemCount: count(projectItems.variantId),
+    })
     .from(projects)
-    .where(eq(projects.ownerId, ownerId))
-    .orderBy(desc(projects.createdAt))
+    .leftJoin(projectItems, eq(projectItems.projectId, projects.id))
+    .where(and(...conditions))
+    .groupBy(projects.id)
+    .orderBy(desc(sortColumn))
+}
 
 export const getOwned = async (
   id: string,
@@ -119,7 +194,9 @@ export const getOwned = async (
   const project = await findOwned(id, ownerId)
   if (!project) return null
 
-  return { ...project, items: await loadItems(id) }
+  const [items, phases] = await Promise.all([loadItems(id), loadPhases(id)])
+
+  return { ...project, items, phases }
 }
 
 export const remove = async (id: string, ownerId: string): Promise<void> => {
@@ -155,14 +232,7 @@ export const setItem = async (
       set: { quantity },
     })
 
-  return {
-    variantId,
-    quantity,
-    sku: ref.sku,
-    price: ref.price,
-    label: ref.label,
-    product: ref.product,
-  }
+  return toItem({ variantId, quantity }, ref)
 }
 
 export const removeItem = async (
@@ -194,4 +264,73 @@ export const listItems = async (
   await requireOwned(id, ownerId)
 
   return loadItems(id)
+}
+
+export const listItemsForProjects = async (
+  projectIds: string[],
+): Promise<Map<string, ProjectItem[]>> => {
+  if (projectIds.length === 0) return new Map()
+
+  const rows = await db
+    .select()
+    .from(projectItems)
+    .where(inArray(projectItems.projectId, projectIds))
+    .orderBy(asc(projectItems.projectId), asc(projectItems.variantId))
+
+  if (rows.length === 0) return new Map()
+
+  const refs = await getVariantRefs([
+    ...new Set(rows.map((row) => row.variantId)),
+  ])
+
+  const byProject = new Map<string, ProjectItem[]>()
+  for (const row of rows) {
+    const items = byProject.get(row.projectId) ?? []
+    items.push(toItem(row, requireRef(refs, row.variantId)))
+    byProject.set(row.projectId, items)
+  }
+
+  return byProject
+}
+
+export const setPhaseCompletion = async (
+  id: string,
+  ownerId: string,
+  phase: ProjectPhase,
+  completedOn: string,
+): Promise<ProjectPhaseCompletion> => {
+  await requireOwned(id, ownerId)
+
+  const [row] = await db
+    .insert(projectPhases)
+    .values({ projectId: id, phase, completedOn })
+    .onConflictDoUpdate({
+      target: [projectPhases.projectId, projectPhases.phase],
+      set: { completedOn },
+    })
+    .returning({
+      phase: projectPhases.phase,
+      completedOn: projectPhases.completedOn,
+    })
+
+  if (!row) throw new Error('setPhaseCompletion failed: upsert returned no row')
+
+  return row
+}
+
+export const clearPhaseCompletion = async (
+  id: string,
+  ownerId: string,
+  phase: ProjectPhase,
+): Promise<void> => {
+  await requireOwned(id, ownerId)
+
+  const deleted = await db
+    .delete(projectPhases)
+    .where(and(eq(projectPhases.projectId, id), eq(projectPhases.phase, phase)))
+    .returning({ phase: projectPhases.phase })
+
+  if (deleted.length === 0) {
+    throw new AppError('NOT_FOUND')
+  }
 }

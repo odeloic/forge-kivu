@@ -35,19 +35,36 @@ BoqItem = {
 
 ## Service surface
 
+~~```~~
+~~listForProject(projectId, ownerId)   → boqSummary[]              changed~~
+~~boqSummaries(projectIds)             → map<projectId, boqProjectSummary>   new~~
+~~getOwned(id, ownerId)                → boqDetail | null          changed: items carry current~~
+~~```~~
+
 ```
+generate(projectId, ownerId)         → boqDetail                 changed: items carry current
 listForProject(projectId, ownerId)   → boqSummary[]              changed
 boqSummaries(projectIds)             → map<projectId, boqProjectSummary>   new
 getOwned(id, ownerId)                → boqDetail | null          changed: items carry current
 ```
 
+`generate` returns `BoqDetail` too, so its items carry `current`; at generation
+every line's product is `published` by definition of `freezeItems`, and the
+status comes from the project items already loaded — no extra query.
+
 `boqSummaries` takes ids the caller has already checked ownership on — `projects.routes` passes the ids from `list(ownerId)`.
 
 ## Routes
 
+~~```~~
+~~GET /projects/:projectId/boqs    changed: lineCount + total per row~~
+~~GET /boqs/:id                    changed: items carry current~~
+~~```~~
+
 ```
-GET /projects/:projectId/boqs    changed: lineCount + total per row
-GET /boqs/:id                    changed: items carry current
+POST /projects/:projectId/boqs   changed: items carry current
+GET  /projects/:projectId/boqs   changed: lineCount + total per row
+GET  /boqs/:id                   changed: items carry current
 ```
 
 ## Implementation plan
@@ -70,7 +87,8 @@ Acceptance criteria:
 Build: `boqSummaries(projectIds)`, selecting the highest revision per project with its aggregate and comparing its lines against current `project_items`.
 
 Acceptance criteria:
-- `boqSummaries` over five project ids is one query for the latest revisions and one for the current items — not two per project.
+~~- `boqSummaries` over five project ids is one query for the latest revisions and one for the current items — not two per project.~~
+- `boqSummaries` over five project ids costs the same number of statements as over one: one for the latest revisions with their frozen lines, plus a constant number for the current items. The current items are read through `projects.listItemsForProjects`, not by querying `project_items` and `product_variants` — a service may not reach into another module's tables (`apps/api/CLAUDE.md`; `projects-module-spec.md` decision 1). `getVariantRefs` runs inside that call, so the guarantee is constant-statement rather than single-statement. The intent of the original bullet — no per-project scaling — is unchanged, and the test asserts equality across one and five projects rather than a literal count, which would be hostage to a module this one does not own.
 - A project whose items are untouched since its latest revision returns `stale: false`.
 - Changing one item's quantity flips it to `stale: true`; changing it back flips it to `false`.
 - Adding an item and removing another so the count matches still returns `stale: true`.

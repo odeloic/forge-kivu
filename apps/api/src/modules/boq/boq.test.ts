@@ -1,17 +1,25 @@
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import ExcelJS from 'exceljs'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { app } from '../../app'
-import { db } from '../../db'
+import { client, db } from '../../db'
 import {
   jsonRequest,
   loginAs,
   loginAsAdmin,
   resetDatabase,
 } from '../../test/helpers'
-import { ROLES } from '@forge-kivu/types'
+import { PRODUCT_STATUSES, ROLES } from '@forge-kivu/types'
+import { users } from '../auth/auth.tables'
 import { productVariants } from '../catalogue/catalogue.tables'
+import { projectItems } from '../projects/projects.tables'
+import {
+  boqSummaries,
+  getOwned,
+  listForProject,
+  type BoqProjectSummary,
+} from './boq.service'
 import { boqItems } from './boq.tables'
 
 const OWNER = { email: 'owner@example.com', password: 'correct horse' }
@@ -33,7 +41,36 @@ type BoqResponse = Record<string, unknown> & {
     unitPrice: number
     quantity: number
     sortOrder: number
+    current: { status: string } | null
   }[]
+}
+
+type BoqSummaryResponse = {
+  id: string
+  projectId: string
+  revision: number
+  createdAt: string
+  lineCount: number
+  total: number
+}
+
+const countQueries = async (run: () => Promise<unknown>): Promise<number> => {
+  const spy = vi.spyOn(client, 'unsafe')
+  try {
+    await run()
+    return spy.mock.calls.length
+  } finally {
+    spy.mockRestore()
+  }
+}
+
+const userId = async (email: string): Promise<string> => {
+  const [row] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.email, email))
+  if (!row) throw new Error(`no user ${email}`)
+  return row.id
 }
 
 const write = (method: 'POST' | 'PUT' | 'DELETE', cookie?: string) => ({
@@ -225,6 +262,7 @@ describe('generate a boq', () => {
         unitPrice: 14.25,
         quantity: 3,
         sortOrder: 0,
+        current: { status: PRODUCT_STATUSES.PUBLISHED },
       },
     ])
     expect(frozen.total).toBe(42.75)
@@ -407,5 +445,313 @@ describe('export a boq', () => {
 
     const res = await exportBoq(boq.id, 'csv', fixture.owner)
     expect(res.status).toBe(404)
+  })
+})
+
+const dropItem = async (
+  projectId: string,
+  variantId: string,
+): Promise<void> => {
+  await db
+    .delete(projectItems)
+    .where(
+      and(
+        eq(projectItems.projectId, projectId),
+        eq(projectItems.variantId, variantId),
+      ),
+    )
+}
+
+const summaryOf = async (
+  projectId: string,
+): Promise<BoqProjectSummary | undefined> =>
+  (await boqSummaries([projectId])).get(projectId)
+
+describe('revision summaries', () => {
+  it('returns lineCount and total on every row, newest first', async () => {
+    const fixture = await projectWithItem()
+    const extra = await seededProduct(fixture.admin, 'steel-bar', 8.5)
+    await generated(fixture)
+    await putItem(fixture.projectId, extra.variantId, fixture.owner, 2)
+    await generated(fixture)
+
+    const res = await listBoqs(fixture.projectId, fixture.owner)
+
+    expect(res.status).toBe(200)
+    const rows = (await res.json()) as BoqSummaryResponse[]
+    expect(rows.map((row) => [row.revision, row.lineCount, row.total])).toEqual(
+      [
+        [2, 2, 59.75],
+        [1, 1, 42.75],
+      ],
+    )
+  })
+
+  it('matches the detail total to the cent', async () => {
+    const fixture = await projectWithItem()
+    const extra = await seededProduct(fixture.admin, 'sand-bag', 3.33)
+    await putItem(fixture.projectId, extra.variantId, fixture.owner, 7)
+    const boq = await generated(fixture)
+
+    const rows = (await (
+      await listBoqs(fixture.projectId, fixture.owner)
+    ).json()) as BoqSummaryResponse[]
+    const detail = (await (
+      await getBoq(boq.id, fixture.owner)
+    ).json()) as BoqResponse
+
+    expect(rows[0]?.total).toBe(detail.total)
+    expect(rows[0]?.lineCount).toBe(detail.items.length)
+  })
+
+  it('aggregates three revisions in one query', async () => {
+    const fixture = await projectWithItem()
+    const owner = await userId(OWNER.email)
+    await generated(fixture)
+
+    const one = await countQueries(() =>
+      listForProject(fixture.projectId, owner),
+    )
+    await generated(fixture)
+    await generated(fixture)
+    const three = await countQueries(() =>
+      listForProject(fixture.projectId, owner),
+    )
+
+    expect(one).toBe(2)
+    expect(three).toBe(2)
+  })
+
+  it('returns an empty list for a project with no revisions', async () => {
+    const owner = await loginAs(OWNER)
+    const projectId = await createProject(owner)
+
+    const res = await listBoqs(projectId, owner)
+
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual([])
+  })
+})
+
+describe('cross-project summaries', () => {
+  it('returns the latest revision per project', async () => {
+    const fixture = await projectWithItem()
+    await generated(fixture)
+    await putItem(fixture.projectId, fixture.variantId, fixture.owner, 4)
+    await generated(fixture)
+
+    const summary = await summaryOf(fixture.projectId)
+
+    expect(summary).toMatchObject({
+      projectId: fixture.projectId,
+      revision: 2,
+      lineCount: 1,
+      total: 57,
+      stale: false,
+    })
+  })
+
+  it('does not scale its query count with the project count', async () => {
+    const fixture = await projectWithItem()
+    await generated(fixture)
+    const projectIds = [fixture.projectId]
+
+    const forOne = await countQueries(() => boqSummaries(projectIds))
+
+    for (let index = 0; index < 4; index++) {
+      const projectId = await createProject(fixture.owner)
+      await putItem(projectId, fixture.variantId, fixture.owner, index + 1)
+      const res = await postBoq(projectId, fixture.owner)
+      expect(res.status).toBe(201)
+      projectIds.push(projectId)
+    }
+
+    const forFive = await countQueries(() => boqSummaries(projectIds))
+    const summaries = await boqSummaries(projectIds)
+
+    expect(summaries.size).toBe(5)
+    expect(forFive).toBe(forOne)
+  })
+
+  it('reports untouched items as fresh', async () => {
+    const fixture = await projectWithItem()
+    await generated(fixture)
+
+    expect((await summaryOf(fixture.projectId))?.stale).toBe(false)
+  })
+
+  it('flips on a quantity change and back again', async () => {
+    const fixture = await projectWithItem()
+    await generated(fixture)
+
+    await putItem(fixture.projectId, fixture.variantId, fixture.owner, 5)
+    const changed = await summaryOf(fixture.projectId)
+
+    await putItem(fixture.projectId, fixture.variantId, fixture.owner, 3)
+    const restored = await summaryOf(fixture.projectId)
+
+    expect(changed?.stale).toBe(true)
+    expect(restored?.stale).toBe(false)
+  })
+
+  it('is stale when one item replaces another at the same count', async () => {
+    const fixture = await projectWithItem()
+    await generated(fixture)
+    const extra = await seededProduct(fixture.admin, 'clay-brick', 14.25)
+
+    await putItem(fixture.projectId, extra.variantId, fixture.owner, 3)
+    await dropItem(fixture.projectId, fixture.variantId)
+
+    const summary = await summaryOf(fixture.projectId)
+
+    expect(summary?.lineCount).toBe(1)
+    expect(summary?.stale).toBe(true)
+  })
+
+  it('is stale when the variant is repriced in the catalogue', async () => {
+    const fixture = await projectWithItem()
+    await generated(fixture)
+
+    await db
+      .update(productVariants)
+      .set({ price: 99.99 })
+      .where(eq(productVariants.id, fixture.variantId))
+
+    expect((await summaryOf(fixture.projectId))?.stale).toBe(true)
+  })
+
+  it('is stale when the variant loses its price', async () => {
+    const fixture = await projectWithItem()
+    await generated(fixture)
+
+    await db
+      .update(productVariants)
+      .set({ price: null })
+      .where(eq(productVariants.id, fixture.variantId))
+
+    expect((await summaryOf(fixture.projectId))?.stale).toBe(true)
+  })
+
+  it('separates a null price from a zero price', async () => {
+    const fixture = await projectWithItem()
+    await db
+      .update(productVariants)
+      .set({ price: 0 })
+      .where(eq(productVariants.id, fixture.variantId))
+    await generated(fixture)
+
+    const priced = await summaryOf(fixture.projectId)
+
+    await db
+      .update(productVariants)
+      .set({ price: null })
+      .where(eq(productVariants.id, fixture.variantId))
+
+    const unpriced = await summaryOf(fixture.projectId)
+
+    expect(priced?.stale).toBe(false)
+    expect(unpriced?.stale).toBe(true)
+  })
+
+  it('omits a project with no revisions', async () => {
+    const fixture = await projectWithItem()
+    const bare = await createProject(fixture.owner)
+    await generated(fixture)
+
+    const summaries = await boqSummaries([fixture.projectId, bare])
+
+    expect(summaries.has(fixture.projectId)).toBe(true)
+    expect(summaries.has(bare)).toBe(false)
+  })
+
+  it('returns an empty map for no ids without hitting the database', async () => {
+    const queries = await countQueries(() => boqSummaries([]))
+
+    expect(queries).toBe(0)
+    expect((await boqSummaries([])).size).toBe(0)
+  })
+})
+
+describe('current product status per line', () => {
+  it('reports the status of every line whose variant still exists', async () => {
+    const fixture = await projectWithItem()
+    const extra = await seededProduct(fixture.admin, 'roof-sheet', 21)
+    await putItem(fixture.projectId, extra.variantId, fixture.owner, 1)
+    const boq = await generated(fixture)
+
+    const read = (await (
+      await getBoq(boq.id, fixture.owner)
+    ).json()) as BoqResponse
+
+    expect(read.items.map((item) => item.current)).toEqual([
+      { status: PRODUCT_STATUSES.PUBLISHED },
+      { status: PRODUCT_STATUSES.PUBLISHED },
+    ])
+  })
+
+  it('follows a withdrawal without moving the frozen values', async () => {
+    const fixture = await projectWithItem()
+    const boq = await generated(fixture)
+
+    const withdrawn = await app.request(
+      `/admin/products/${fixture.productId}/unpublish`,
+      write('POST', fixture.admin),
+    )
+    expect(withdrawn.status).toBe(200)
+
+    const read = (await (
+      await getBoq(boq.id, fixture.owner)
+    ).json()) as BoqResponse
+
+    expect(read.items[0]).toMatchObject({
+      variantId: fixture.variantId,
+      name: 'Product cement-tile',
+      sku: 'cement-tile-1',
+      unitPrice: 14.25,
+      quantity: 3,
+      current: { status: PRODUCT_STATUSES.NOT_AVAILABLE },
+    })
+    expect(read.total).toBe(42.75)
+  })
+
+  it('keeps a deleted variant line on its frozen values', async () => {
+    const fixture = await projectWithItem()
+    const boq = await generated(fixture)
+
+    await dropItem(fixture.projectId, fixture.variantId)
+    await db
+      .delete(productVariants)
+      .where(eq(productVariants.id, fixture.variantId))
+
+    const read = (await (
+      await getBoq(boq.id, fixture.owner)
+    ).json()) as BoqResponse
+
+    expect(read.items[0]).toMatchObject({
+      variantId: null,
+      current: null,
+      name: 'Product cement-tile',
+      sku: 'cement-tile-1',
+      unitPrice: 14.25,
+      quantity: 3,
+    })
+  })
+
+  it('resolves a whole revision in one variant lookup', async () => {
+    const fixture = await projectWithItem()
+    const owner = await userId(OWNER.email)
+    const single = await generated(fixture)
+
+    const forOne = await countQueries(() => getOwned(single.id, owner))
+
+    for (const slug of ['pipe-a', 'pipe-b']) {
+      const extra = await seededProduct(fixture.admin, slug, 5)
+      await putItem(fixture.projectId, extra.variantId, fixture.owner, 1)
+    }
+    const many = await generated(fixture)
+    const forThree = await countQueries(() => getOwned(many.id, owner))
+
+    expect((await getOwned(many.id, owner))?.items).toHaveLength(3)
+    expect(forThree).toBe(forOne)
   })
 })

@@ -4,7 +4,7 @@ definePageMeta({ access: 'authenticated', layout: 'workshop' })
 const api = useApi()
 
 const { data: projects } = await useAsyncData('projects', async () => {
-  const res = await api.projects.$get()
+  const res = await api.projects.$get({ query: {} })
   if (!res.ok) return []
   return res.json()
 })

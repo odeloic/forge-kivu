@@ -4,7 +4,7 @@ import {
   PutObjectCommand,
 } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
-import { and, eq, or } from 'drizzle-orm'
+import { and, eq, inArray, or } from 'drizzle-orm'
 
 import { db } from '../../db'
 import { isReferenceViolation } from '../../db/errors'
@@ -118,6 +118,17 @@ export const getReady = async (mediaId: string): Promise<Media | null> => {
     .limit(1)
 
   return row ?? null
+}
+
+export const listReady = async (mediaIds: string[]): Promise<Media[]> => {
+  if (mediaIds.length === 0) return []
+
+  return db
+    .select()
+    .from(media)
+    .where(
+      and(inArray(media.id, mediaIds), eq(media.status, MEDIA_STATUSES.READY)),
+    )
 }
 
 export const getPublicUrl = (key: string): string =>

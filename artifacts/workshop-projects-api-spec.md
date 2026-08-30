@@ -30,6 +30,10 @@ ProjectSummary = Project & {
   itemCount: number
 }
 
+ProjectListItem = ProjectSummary & {              new
+  latestBoq: BoqProjectSummary | null
+}
+
 ProjectItem = {
   variantId, quantity, sku, price, label,
   product:  { id, name, status },
@@ -51,9 +55,12 @@ list(ownerId, query)                        → projectSummary[]      changed
 getOwned(id, ownerId)                       → projectDetail | null  changed
 setPhaseCompletion(id, ownerId, phase, completedOn)                 new
 clearPhaseCompletion(id, ownerId, phase)                            new
+listItemsForProjects(projectIds)  → map<projectId, projectItem[]>   new
 ```
 
 `query`: `{ projectType?, phase?, sort? }`, `sort` one of `updatedAt` (default) or `createdAt`, both descending.
+
+`listItemsForProjects` backs no route. It exists so the boq module can compare a revision's frozen lines against current items (`workshop-boq-api-spec.md` decision 4) without querying `project_items` itself, which `projects-module-spec.md` decision 1 forbids. Like `boqSummaries` it takes ids the caller has already checked ownership on, and a project with no items is absent from the map.
 
 ## Routes
 
@@ -106,7 +113,8 @@ Acceptance criteria:
 Build: composition in `projects.routes.ts` of `list()` with `boqSummaries()`. Depends on step 2 of `workshop-boq-api-spec.md`.
 
 Acceptance criteria:
-- `GET /projects` returns `latestBoq` per project: `{ revision, createdAt, lineCount, total, stale }`, or `null` for a project with no BOQ.
+- ~~`GET /projects` returns `latestBoq` per project: `{ revision, createdAt, lineCount, total, stale }`, or `null` for a project with no BOQ.~~
+- `GET /projects` returns `latestBoq` per project: the whole `BoqProjectSummary` the map yields, `{ id, projectId, revision, createdAt, lineCount, total, stale }`, or `null` for a project with no BOQ. The row is passed through rather than reshaped: `id` is what the client links a revision by, and reshaping would put a second definition of the summary in this module.
 - Adding an item to a project flips its `latestBoq.stale` to `true` without generating a revision.
 - `projects.service` still has no import from `../boq`.
 

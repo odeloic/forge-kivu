@@ -24,6 +24,7 @@ export { media, mediaStatus } from '../modules/media/media.tables'
 export {
   projectItems,
   projectPhase,
+  projectPhases,
   projects,
   projectType,
   workType,

@@ -1,13 +1,18 @@
-import { asc, desc, eq } from 'drizzle-orm'
+import { asc, desc, eq, inArray, sql } from 'drizzle-orm'
 import ExcelJS from 'exceljs'
 
 import { db } from '../../db'
 import { isUniqueViolation } from '../../db/errors'
 import { AppError } from '../../lib/errors'
-import { PRODUCT_STATUSES } from '../catalogue/catalogue.service'
+import {
+  getVariantRefs,
+  PRODUCT_STATUSES,
+  type ProductStatus,
+} from '../catalogue/catalogue.service'
 import {
   findOwned as findOwnedProject,
   listItems,
+  listItemsForProjects,
   type Project,
   type ProjectItem,
 } from '../projects/projects.service'
@@ -16,7 +21,10 @@ import { EXPORT_FORMATS, type ExportFormat } from './boq.schemas'
 import { boqItems, boqs } from './boq.tables'
 
 export type Boq = typeof boqs.$inferSelect
-export type BoqItem = typeof boqItems.$inferSelect
+export type BoqItemRow = typeof boqItems.$inferSelect
+export type BoqItem = BoqItemRow & { current: { status: ProductStatus } | null }
+export type BoqSummary = Boq & { lineCount: number; total: number }
+export type BoqProjectSummary = BoqSummary & { stale: boolean }
 export type BoqDetail = Boq & { items: BoqItem[]; total: number }
 
 export type ExportFile = {
@@ -45,11 +53,33 @@ const CONTENT_TYPES = {
 const itemName = (item: ProjectItem): string =>
   item.label ? `${item.product.name} (${item.label})` : item.product.name
 
-const lineTotalCents = (item: BoqItem): number =>
-  Math.round(item.unitPrice * 100) * item.quantity
+type Line = { unitPrice: number; quantity: number }
 
-const totalOf = (items: BoqItem[]): number =>
-  items.reduce((sum, item) => sum + lineTotalCents(item), 0) / 100
+type ComparableLine = Line & { variantId: string | null }
+
+const lineTotalCents = (line: Line): number =>
+  Math.round(line.unitPrice * 100) * line.quantity
+
+const totalOf = (lines: Line[]): number =>
+  lines.reduce((sum, line) => sum + lineTotalCents(line), 0) / 100
+
+const lineCents = sql`round(${boqItems.unitPrice} * 100) * ${boqItems.quantity}`
+
+const lineKey = (line: {
+  variantId: string | null
+  quantity: number
+  unitPrice: number | null
+}): string =>
+  `${line.variantId ?? ''}:${line.quantity}:${
+    line.unitPrice === null ? '' : Math.round(line.unitPrice * 100)
+  }`
+
+const sameLines = (frozen: string[], current: string[]): boolean => {
+  if (frozen.length !== current.length) return false
+  const left = [...frozen].sort()
+  const right = [...current].sort()
+  return left.every((key, index) => key === right[index])
+}
 
 const freezeItems = (items: ProjectItem[]): FrozenItem[] => {
   if (items.length === 0) throw new AppError('BOQ_NOT_GENERATABLE')
@@ -94,7 +124,17 @@ const findOwnedBoq = async (
   return { boq, project }
 }
 
-const loadItems = async (boqId: string): Promise<BoqItem[]> =>
+const withCurrent = (
+  rows: BoqItemRow[],
+  statuses: Map<string, ProductStatus>,
+): BoqItem[] =>
+  rows.map((row) => {
+    const status =
+      row.variantId === null ? undefined : statuses.get(row.variantId)
+    return { ...row, current: status ? { status } : null }
+  })
+
+const loadItems = async (boqId: string): Promise<BoqItemRow[]> =>
   db
     .select()
     .from(boqItems)
@@ -105,7 +145,11 @@ export const generate = async (
   projectId: string,
   ownerId: string,
 ): Promise<BoqDetail> => {
-  const frozen = freezeItems(await listItems(projectId, ownerId))
+  const source = await listItems(projectId, ownerId)
+  const frozen = freezeItems(source)
+  const statuses = new Map(
+    source.map((item) => [item.variantId, item.product.status]),
+  )
 
   for (let attempt = 1; ; attempt++) {
     try {
@@ -129,7 +173,11 @@ export const generate = async (
           .values(frozen.map((item) => ({ boqId: boq.id, ...item })))
           .returning()
 
-        return { ...boq, items, total: totalOf(items) }
+        return {
+          ...boq,
+          items: withCurrent(items, statuses),
+          total: totalOf(items),
+        }
       })
     } catch (error) {
       if (attempt >= GENERATE_ATTEMPTS || !isUniqueViolation(error)) {
@@ -142,14 +190,114 @@ export const generate = async (
 export const listForProject = async (
   projectId: string,
   ownerId: string,
-): Promise<Boq[]> => {
+): Promise<BoqSummary[]> => {
   await requireOwnedProject(projectId, ownerId)
 
-  return db
-    .select()
+  const rows = await db
+    .select({
+      id: boqs.id,
+      projectId: boqs.projectId,
+      revision: boqs.revision,
+      createdAt: boqs.createdAt,
+      lineCount: sql<number>`count(${boqItems.id})`.mapWith(Number),
+      totalCents: sql<number>`coalesce(sum(${lineCents}), 0)`.mapWith(Number),
+    })
     .from(boqs)
+    .leftJoin(boqItems, eq(boqItems.boqId, boqs.id))
     .where(eq(boqs.projectId, projectId))
+    .groupBy(boqs.id)
     .orderBy(desc(boqs.revision))
+
+  return rows.map(({ totalCents, ...row }) => ({
+    ...row,
+    total: totalCents / 100,
+  }))
+}
+
+export const boqSummaries = async (
+  projectIds: string[],
+): Promise<Map<string, BoqProjectSummary>> => {
+  if (projectIds.length === 0) return new Map()
+
+  const latest = db.$with('latest_boqs').as(
+    db
+      .selectDistinctOn([boqs.projectId], {
+        id: boqs.id,
+        projectId: boqs.projectId,
+        revision: boqs.revision,
+        createdAt: boqs.createdAt,
+      })
+      .from(boqs)
+      .where(inArray(boqs.projectId, projectIds))
+      .orderBy(boqs.projectId, desc(boqs.revision)),
+  )
+
+  const [frozenRows, currentItems] = await Promise.all([
+    db
+      .with(latest)
+      .select({
+        id: latest.id,
+        projectId: latest.projectId,
+        revision: latest.revision,
+        createdAt: latest.createdAt,
+        variantId: boqItems.variantId,
+        unitPrice: boqItems.unitPrice,
+        quantity: boqItems.quantity,
+      })
+      .from(latest)
+      .leftJoin(boqItems, eq(boqItems.boqId, latest.id)),
+    listItemsForProjects(projectIds),
+  ])
+
+  const frozen = new Map<string, { boq: Boq; lines: ComparableLine[] }>()
+  for (const row of frozenRows) {
+    const entry = frozen.get(row.projectId) ?? {
+      boq: {
+        id: row.id,
+        projectId: row.projectId,
+        revision: row.revision,
+        createdAt: row.createdAt,
+      },
+      lines: [],
+    }
+    if (row.unitPrice !== null && row.quantity !== null) {
+      entry.lines.push({
+        variantId: row.variantId,
+        unitPrice: row.unitPrice,
+        quantity: row.quantity,
+      })
+    }
+    frozen.set(row.projectId, entry)
+  }
+
+  const current = new Map<string, string[]>()
+  for (const [projectId, items] of currentItems) {
+    current.set(
+      projectId,
+      items.map((item) =>
+        lineKey({
+          variantId: item.variantId,
+          quantity: item.quantity,
+          unitPrice: item.price,
+        }),
+      ),
+    )
+  }
+
+  return new Map(
+    [...frozen].map(([projectId, entry]) => [
+      projectId,
+      {
+        ...entry.boq,
+        lineCount: entry.lines.length,
+        total: totalOf(entry.lines),
+        stale: !sameLines(
+          entry.lines.map(lineKey),
+          current.get(projectId) ?? [],
+        ),
+      },
+    ]),
+  )
 }
 
 export const getOwned = async (
@@ -159,9 +307,20 @@ export const getOwned = async (
   const found = await findOwnedBoq(id, ownerId)
   if (!found) return null
 
-  const items = await loadItems(id)
+  const rows = await loadItems(id)
+  const refs = await getVariantRefs(
+    rows.flatMap((row) => (row.variantId === null ? [] : [row.variantId])),
+  )
 
-  return { ...found.boq, items, total: totalOf(items) }
+  const statuses = new Map(
+    [...refs].map(([variantId, ref]) => [variantId, ref.product.status]),
+  )
+
+  return {
+    ...found.boq,
+    items: withCurrent(rows, statuses),
+    total: totalOf(rows),
+  }
 }
 
 const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
@@ -176,7 +335,7 @@ const csvValue = (value: string | number | null): string => {
   return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text
 }
 
-const buildCsv = (items: BoqItem[]): ArrayBuffer => {
+const buildCsv = (items: BoqItemRow[]): ArrayBuffer => {
   const lines = [
     'name,sku,unitPrice,quantity',
     ...items.map((item) =>
@@ -191,7 +350,7 @@ const buildCsv = (items: BoqItem[]): ArrayBuffer => {
 const buildXlsx = async (
   project: Project,
   boq: Boq,
-  items: BoqItem[],
+  items: BoqItemRow[],
   currency: string,
 ): Promise<ArrayBuffer> => {
   const workbook = new ExcelJS.Workbook()

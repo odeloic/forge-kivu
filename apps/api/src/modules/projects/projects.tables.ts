@@ -102,3 +102,15 @@ export const projectItems = pgTable(
   },
   (table) => [primaryKey({ columns: [table.projectId, table.variantId] })],
 )
+
+export const projectPhases = pgTable(
+  'project_phases',
+  {
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    phase: projectPhase('phase').notNull(),
+    completedOn: date('completed_on').notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.projectId, table.phase] })],
+)

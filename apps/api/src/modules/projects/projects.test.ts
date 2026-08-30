@@ -1,19 +1,22 @@
 import { eq } from 'drizzle-orm'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { app } from '../../app'
-import { db } from '../../db'
+import { client, db } from '../../db'
 import {
   jsonRequest,
   loginAs,
   loginAsAdmin,
   resetDatabase,
 } from '../../test/helpers'
+import { createReadyMedia, ensurePublicBucket } from '../../test/media'
 import { ROLES } from '@forge-kivu/types'
-import { projectItems, projects } from './projects.tables'
+import { listItemsForProjects } from './projects.service'
+import { projectItems, projectPhases, projects } from './projects.tables'
 
 const OWNER = { email: 'owner@example.com', password: 'correct horse' }
 const OTHER = { email: 'other@example.com', password: 'correct horse' }
+const UPLOADER = { email: 'uploader@example.com', password: 'correct horse' }
 const ADMIN = {
   email: 'admin@example.com',
   password: 'correct horse',
@@ -41,7 +44,8 @@ const authGet = (path: string, cookie?: string) =>
 const postProject = (cookie: string, body: unknown) =>
   app.request('/projects', jsonRequest(body, cookie))
 
-const listProjects = (cookie?: string) => authGet('/projects', cookie)
+const listProjects = (cookie?: string, query = '') =>
+  authGet(`/projects${query}`, cookie)
 
 const getProject = (id: string, cookie?: string) =>
   authGet(`/projects/${id}`, cookie)
@@ -63,6 +67,37 @@ const putItem = (
 const deleteItem = (id: string, variantId: string, cookie: string) =>
   app.request(`/projects/${id}/items/${variantId}`, write('DELETE', cookie))
 
+const putPhase = (id: string, phase: string, cookie: string, body: unknown) =>
+  app.request(`/projects/${id}/phases/${phase}`, write('PUT', cookie, body))
+
+const deletePhase = (id: string, phase: string, cookie: string) =>
+  app.request(`/projects/${id}/phases/${phase}`, write('DELETE', cookie))
+
+const jsonOf = async <T>(res: Response): Promise<T> => (await res.json()) as T
+
+const storedProject = async (id: string) => {
+  const [row] = await db.select().from(projects).where(eq(projects.id, id))
+  if (!row) throw new Error(`project ${id} is not stored`)
+  return row
+}
+
+const afterHostClockPasses = async (at: Date): Promise<void> => {
+  const wait = at.getTime() + 1 - Date.now()
+  if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait))
+}
+
+const countingQueries = async <T>(
+  run: () => T | Promise<T>,
+): Promise<{ result: Awaited<T>; queries: number }> => {
+  const spy = vi.spyOn(client, 'unsafe')
+  try {
+    const result = await run()
+    return { result, queries: spy.mock.calls.length }
+  } finally {
+    spy.mockRestore()
+  }
+}
+
 const createdId = async (res: Response, what: string): Promise<string> => {
   if (res.status !== 201) {
     throw new Error(`${what} failed with status ${res.status}`)
@@ -71,12 +106,18 @@ const createdId = async (res: Response, what: string): Promise<string> => {
   return json.id
 }
 
-type CatalogueSeed = { productId: string; variantId: string }
+type CatalogueSeed = {
+  productId: string
+  variantId: string
+  supplierId: string
+  categoryId: string
+}
 
 const seededProduct = async (
   admin: string,
   slug: string,
   publish: boolean,
+  uploader?: string,
 ): Promise<CatalogueSeed> => {
   const supplierId = await createdId(
     await app.request(
@@ -120,6 +161,17 @@ const seededProduct = async (
   const variantId = detail.variants[0]?.id
   if (!variantId) throw new Error('set variants returned no variant')
 
+  if (uploader) {
+    const mediaId = await createReadyMedia(uploader)
+    const attached = await app.request(
+      `/admin/products/${productId}/media`,
+      write('PUT', admin, { mediaIds: [mediaId] }),
+    )
+    if (attached.status !== 200) {
+      throw new Error(`set media failed with status ${attached.status}`)
+    }
+  }
+
   if (publish) {
     const published = await app.request(
       `/admin/products/${productId}/publish`,
@@ -130,7 +182,7 @@ const seededProduct = async (
     }
   }
 
-  return { productId, variantId }
+  return { productId, variantId, supplierId, categoryId }
 }
 
 const projectBody = (overrides: Record<string, unknown> = {}) => ({
@@ -150,6 +202,10 @@ const createProject = async (
   const json = (await res.json()) as ProjectResponse
   return json.id
 }
+
+beforeAll(async () => {
+  await ensurePublicBucket()
+})
 
 beforeEach(async () => {
   await resetDatabase()
@@ -529,5 +585,577 @@ describe('manage project items', () => {
       write('DELETE', admin),
     )
     expect(retried.status).toBe(204)
+  })
+})
+
+describe('list projects with counts, filters and sorting', () => {
+  it('returns an itemCount on every row, zero when there are no items', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const first = await seededProduct(admin, 'cement-tile', true)
+    const second = await seededProduct(admin, 'steel-bar', true)
+    const owner = await loginAs(OWNER)
+    const stocked = await createProject(owner, { name: 'Stocked' })
+    const empty = await createProject(owner, { name: 'Empty' })
+    await putItem(stocked, first.variantId, owner, { quantity: 2 })
+    await putItem(stocked, second.variantId, owner, { quantity: 4 })
+
+    const res = await listProjects(owner)
+
+    expect(res.status).toBe(200)
+    const rows = await jsonOf<{ id: string; itemCount: number }[]>(res)
+    const counts = new Map(rows.map((row) => [row.id, row.itemCount]))
+    expect(counts.get(stocked)).toBe(2)
+    expect(counts.get(empty)).toBe(0)
+    expect(rows.every((row) => 'itemCount' in row)).toBe(true)
+  })
+
+  it('counts only the caller own items', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const { variantId } = await seededProduct(admin, 'cement-tile', true)
+    const owner = await loginAs(OWNER)
+    const mine = await createProject(owner)
+    await putItem(mine, variantId, owner, { quantity: 3 })
+    const other = await loginAs(OTHER)
+    const theirs = await createProject(other, { name: 'Theirs' })
+    await putItem(theirs, variantId, other, { quantity: 7 })
+
+    const rows = await jsonOf<{ id: string; itemCount: number }[]>(
+      await listProjects(owner),
+    )
+
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({ id: mine, itemCount: 1 })
+  })
+
+  it('filters by projectType and rejects an unknown value', async () => {
+    const owner = await loginAs(OWNER)
+    const shop = await createProject(owner, {
+      name: 'Shop',
+      projectType: 'commercial',
+    })
+    await createProject(owner, { name: 'House' })
+
+    const filtered = await listProjects(owner, '?projectType=commercial')
+    const bad = await listProjects(owner, '?projectType=castle')
+
+    const rows = await jsonOf<{ id: string }[]>(filtered)
+    expect(rows.map((row) => row.id)).toEqual([shop])
+    expect(bad.status).toBe(400)
+  })
+
+  it('filters by phase and excludes projects with no phase', async () => {
+    const owner = await loginAs(OWNER)
+    const roofing = await createProject(owner, {
+      name: 'Roofing',
+      phase: 'roofing',
+    })
+    await createProject(owner, { name: 'Foundation', phase: 'foundation' })
+    await createProject(owner, { name: 'Unphased' })
+
+    const rows = await jsonOf<{ id: string }[]>(
+      await listProjects(owner, '?phase=roofing'),
+    )
+
+    expect(rows.map((row) => row.id)).toEqual([roofing])
+  })
+
+  it('sorts by updatedAt by default and by createdAt on request', async () => {
+    const owner = await loginAs(OWNER)
+    const older = await createProject(owner, { name: 'Older' })
+    const newer = await createProject(owner, { name: 'Newer' })
+    await afterHostClockPasses((await storedProject(newer)).updatedAt)
+    await patchProject(older, owner, { name: 'Older, touched' })
+
+    const byUpdated = await jsonOf<{ id: string }[]>(await listProjects(owner))
+    const byCreated = await jsonOf<{ id: string }[]>(
+      await listProjects(owner, '?sort=createdAt'),
+    )
+    const bad = await listProjects(owner, '?sort=name')
+
+    expect(byUpdated.map((row) => row.id)).toEqual([older, newer])
+    expect(byCreated.map((row) => row.id)).toEqual([newer, older])
+    expect(bad.status).toBe(400)
+  })
+
+  it('counts items in one query however many projects there are', async () => {
+    const owner = await loginAs(OWNER)
+    await createProject(owner, { name: 'One' })
+    await createProject(owner, { name: 'Two' })
+
+    const small = await countingQueries(() => listProjects(owner))
+
+    for (let index = 0; index < 8; index += 1) {
+      await createProject(owner, { name: `Extra ${index}` })
+    }
+
+    const large = await countingQueries(() => listProjects(owner))
+
+    expect((await jsonOf<{ id: string }[]>(small.result)).length).toBe(2)
+    expect((await jsonOf<{ id: string }[]>(large.result)).length).toBe(10)
+    expect(large.queries).toBe(small.queries)
+  })
+})
+
+describe('phase completion', () => {
+  it('records a completion and updates the same row on repeat', async () => {
+    const owner = await loginAs(OWNER)
+    const id = await createProject(owner)
+
+    const first = await putPhase(id, 'foundation', owner, {
+      completedOn: '2026-04-18',
+    })
+    const second = await putPhase(id, 'foundation', owner, {
+      completedOn: '2026-05-02',
+    })
+
+    expect(first.status).toBe(200)
+    expect(await jsonOf(first)).toEqual({
+      phase: 'foundation',
+      completedOn: '2026-04-18',
+    })
+    expect(second.status).toBe(200)
+
+    const rows = await db
+      .select()
+      .from(projectPhases)
+      .where(eq(projectPhases.projectId, id))
+    expect(rows).toHaveLength(1)
+    expect(rows[0]?.completedOn).toBe('2026-05-02')
+  })
+
+  it('rejects a phase outside the enum and a malformed date', async () => {
+    const owner = await loginAs(OWNER)
+    const id = await createProject(owner)
+
+    const badPhase = await putPhase(id, 'orbit', owner, {
+      completedOn: '2026-04-18',
+    })
+    const badDate = await putPhase(id, 'foundation', owner, {
+      completedOn: 'yesterday',
+    })
+    const missingDate = await putPhase(id, 'foundation', owner, {})
+
+    expect(badPhase.status).toBe(400)
+    expect(badDate.status).toBe(400)
+    expect(missingDate.status).toBe(400)
+  })
+
+  it('hides another user project behind a 404', async () => {
+    const owner = await loginAs(OWNER)
+    const id = await createProject(owner)
+    await putPhase(id, 'foundation', owner, { completedOn: '2026-04-18' })
+    const other = await loginAs(OTHER)
+
+    const written = await putPhase(id, 'structure', other, {
+      completedOn: '2026-04-18',
+    })
+    const cleared = await deletePhase(id, 'foundation', other)
+
+    expect(written.status).toBe(404)
+    expect(cleared.status).toBe(404)
+    expect(
+      await db
+        .select()
+        .from(projectPhases)
+        .where(eq(projectPhases.projectId, id)),
+    ).toHaveLength(1)
+  })
+
+  it('rejects an anonymous caller', async () => {
+    const owner = await loginAs(OWNER)
+    const id = await createProject(owner)
+
+    const written = await app.request(
+      `/projects/${id}/phases/foundation`,
+      write('PUT', '', { completedOn: '2026-04-18' }),
+    )
+    const cleared = await app.request(
+      `/projects/${id}/phases/foundation`,
+      write('DELETE', ''),
+    )
+
+    expect(written.status).toBe(401)
+    expect(cleared.status).toBe(401)
+  })
+
+  it('returns phases in the enum declared order, not by completedOn', async () => {
+    const owner = await loginAs(OWNER)
+    const id = await createProject(owner)
+    await putPhase(id, 'roofing', owner, { completedOn: '2026-01-05' })
+    await putPhase(id, 'foundation', owner, { completedOn: '2026-09-30' })
+    await putPhase(id, 'structure', owner, { completedOn: '2026-03-11' })
+
+    const body = await jsonOf<{
+      phases: { phase: string; completedOn: string }[]
+    }>(await getProject(id, owner))
+
+    expect(body.phases).toEqual([
+      { phase: 'foundation', completedOn: '2026-09-30' },
+      { phase: 'structure', completedOn: '2026-03-11' },
+      { phase: 'roofing', completedOn: '2026-01-05' },
+    ])
+  })
+
+  it('returns an empty phases list on an untouched project', async () => {
+    const owner = await loginAs(OWNER)
+    const id = await createProject(owner)
+
+    const body = await jsonOf<{ phases: unknown[] }>(
+      await getProject(id, owner),
+    )
+
+    expect(body.phases).toEqual([])
+  })
+
+  it('clears a phase and returns 404 on a second delete', async () => {
+    const owner = await loginAs(OWNER)
+    const id = await createProject(owner)
+    await putPhase(id, 'foundation', owner, { completedOn: '2026-04-18' })
+
+    const cleared = await deletePhase(id, 'foundation', owner)
+    const again = await deletePhase(id, 'foundation', owner)
+
+    expect(cleared.status).toBe(204)
+    expect(again.status).toBe(404)
+    expect(
+      await db
+        .select()
+        .from(projectPhases)
+        .where(eq(projectPhases.projectId, id)),
+    ).toEqual([])
+  })
+
+  it('deletes phase rows with the project', async () => {
+    const owner = await loginAs(OWNER)
+    const id = await createProject(owner)
+    await putPhase(id, 'foundation', owner, { completedOn: '2026-04-18' })
+
+    const res = await deleteProject(id, owner)
+
+    expect(res.status).toBe(204)
+    expect(
+      await db
+        .select()
+        .from(projectPhases)
+        .where(eq(projectPhases.projectId, id)),
+    ).toEqual([])
+  })
+
+  it('keeps phase completion separate from the current phase column', async () => {
+    const owner = await loginAs(OWNER)
+    const id = await createProject(owner, { phase: 'structure' })
+
+    await putPhase(id, 'foundation', owner, { completedOn: '2026-04-18' })
+    const body = await jsonOf<{ phase: string; phases: unknown[] }>(
+      await getProject(id, owner),
+    )
+
+    expect(body.phase).toBe('structure')
+    expect(body.phases).toHaveLength(1)
+  })
+})
+
+describe('enriched project items', () => {
+  it('carries category, supplier and imageUrl on every item', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const uploader = await loginAs(UPLOADER)
+    const seed = await seededProduct(admin, 'cement-tile', true, uploader)
+    const owner = await loginAs(OWNER)
+    const id = await createProject(owner)
+    await putItem(id, seed.variantId, owner, { quantity: 2 })
+
+    const body = await jsonOf<{
+      items: {
+        category: { id: string; name: string; slug: string }
+        supplier: { id: string; name: string; slug: string }
+        imageUrl: string | null
+      }[]
+    }>(await getProject(id, owner))
+
+    expect(body.items[0]).toMatchObject({
+      category: {
+        id: seed.categoryId,
+        name: 'Category cement-tile',
+        slug: 'category-cement-tile',
+      },
+      supplier: {
+        id: seed.supplierId,
+        name: 'Supplier cement-tile',
+        slug: 'supplier-cement-tile',
+      },
+    })
+    expect(body.items[0]?.imageUrl).toMatch(/^https?:\/\//)
+  })
+
+  it('returns a null imageUrl for a product with no media', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const { variantId } = await seededProduct(admin, 'cement-tile', true)
+    const owner = await loginAs(OWNER)
+    const id = await createProject(owner)
+    await putItem(id, variantId, owner, { quantity: 1 })
+
+    const body = await jsonOf<{ items: Record<string, unknown>[] }>(
+      await getProject(id, owner),
+    )
+
+    expect(body.items[0]).toHaveProperty('imageUrl')
+    expect(body.items[0]?.imageUrl).toBeNull()
+  })
+
+  it('keeps category and supplier on an item retired after it was added', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const uploader = await loginAs(UPLOADER)
+    const seed = await seededProduct(admin, 'cement-tile', true, uploader)
+    const owner = await loginAs(OWNER)
+    const id = await createProject(owner)
+    await putItem(id, seed.variantId, owner, { quantity: 2 })
+
+    const retired = await app.request(
+      `/admin/products/${seed.productId}/unpublish`,
+      write('POST', admin),
+    )
+    const body = await jsonOf<{
+      items: {
+        product: { status: string }
+        category: { name: string }
+        supplier: { name: string }
+        imageUrl: string | null
+      }[]
+    }>(await getProject(id, owner))
+
+    expect(retired.status).toBe(200)
+    expect(body.items).toHaveLength(1)
+    expect(body.items[0]).toMatchObject({
+      product: { status: 'not_available' },
+      category: { name: 'Category cement-tile' },
+      supplier: { name: 'Supplier cement-tile' },
+    })
+    expect(body.items[0]?.imageUrl).toMatch(/^https?:\/\//)
+  })
+
+  it('resolves items in one round trip however many there are', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const first = await seededProduct(admin, 'cement-tile', true)
+    const second = await seededProduct(admin, 'steel-bar', true)
+    const third = await seededProduct(admin, 'roof-sheet', true)
+    const owner = await loginAs(OWNER)
+    const id = await createProject(owner)
+    await putItem(id, first.variantId, owner, { quantity: 1 })
+
+    const one = await countingQueries(() => getProject(id, owner))
+
+    await putItem(id, second.variantId, owner, { quantity: 1 })
+    await putItem(id, third.variantId, owner, { quantity: 1 })
+
+    const three = await countingQueries(() => getProject(id, owner))
+
+    expect((await jsonOf<{ items: unknown[] }>(one.result)).items).toHaveLength(
+      1,
+    )
+    expect(
+      (await jsonOf<{ items: unknown[] }>(three.result)).items,
+    ).toHaveLength(3)
+    expect(three.queries).toBe(one.queries)
+  })
+})
+
+describe('latest BOQ on the project list', () => {
+  const generateBoq = (projectId: string, cookie: string) =>
+    app.request(`/projects/${projectId}/boqs`, write('POST', cookie))
+
+  it('returns the latest revision per project and null without one', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const { variantId } = await seededProduct(admin, 'cement-tile', true)
+    const owner = await loginAs(OWNER)
+    const withBoq = await createProject(owner, { name: 'With BOQ' })
+    const withoutBoq = await createProject(owner, { name: 'Without BOQ' })
+    await putItem(withBoq, variantId, owner, { quantity: 2 })
+    const generated = await generateBoq(withBoq, owner)
+
+    const rows = await jsonOf<
+      {
+        id: string
+        latestBoq: {
+          revision: number
+          createdAt: string
+          lineCount: number
+          total: number
+          stale: boolean
+        } | null
+      }[]
+    >(await listProjects(owner))
+    const byId = new Map(rows.map((row) => [row.id, row.latestBoq]))
+
+    expect(generated.status).toBe(201)
+    expect(byId.get(withBoq)).toMatchObject({
+      revision: 1,
+      lineCount: 1,
+      total: 28.5,
+      stale: false,
+    })
+    expect(byId.get(withBoq)?.createdAt).toBeTruthy()
+    expect(byId.get(withoutBoq)).toBeNull()
+  })
+
+  it('reports the highest revision when a project has several', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const { variantId } = await seededProduct(admin, 'cement-tile', true)
+    const owner = await loginAs(OWNER)
+    const id = await createProject(owner)
+    await putItem(id, variantId, owner, { quantity: 2 })
+    await generateBoq(id, owner)
+    await generateBoq(id, owner)
+
+    const rows = await jsonOf<
+      { id: string; latestBoq: { revision: number } | null }[]
+    >(await listProjects(owner))
+
+    expect(rows[0]?.latestBoq?.revision).toBe(2)
+  })
+
+  it('flips stale to true when an item is added without a new revision', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const first = await seededProduct(admin, 'cement-tile', true)
+    const second = await seededProduct(admin, 'steel-bar', true)
+    const owner = await loginAs(OWNER)
+    const id = await createProject(owner)
+    await putItem(id, first.variantId, owner, { quantity: 2 })
+    await generateBoq(id, owner)
+
+    const fresh = await jsonOf<
+      { latestBoq: { revision: number; stale: boolean } | null }[]
+    >(await listProjects(owner))
+    await putItem(id, second.variantId, owner, { quantity: 1 })
+    const stale = await jsonOf<
+      { latestBoq: { revision: number; stale: boolean } | null }[]
+    >(await listProjects(owner))
+
+    expect(fresh[0]?.latestBoq).toMatchObject({ revision: 1, stale: false })
+    expect(stale[0]?.latestBoq).toMatchObject({ revision: 1, stale: true })
+  })
+
+  it('never exposes another user BOQ on the list', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const { variantId } = await seededProduct(admin, 'cement-tile', true)
+    const owner = await loginAs(OWNER)
+    const mine = await createProject(owner)
+    await putItem(mine, variantId, owner, { quantity: 2 })
+    const other = await loginAs(OTHER)
+    const theirs = await createProject(other, { name: 'Theirs' })
+    await putItem(theirs, variantId, other, { quantity: 3 })
+    await generateBoq(theirs, other)
+
+    const rows = await jsonOf<{ id: string; latestBoq: unknown }[]>(
+      await listProjects(owner),
+    )
+
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({ id: mine, latestBoq: null })
+  })
+
+  it('summarises the whole list in a fixed number of queries', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const { variantId } = await seededProduct(admin, 'cement-tile', true)
+    const owner = await loginAs(OWNER)
+    const first = await createProject(owner, { name: 'One' })
+    await putItem(first, variantId, owner, { quantity: 1 })
+    await generateBoq(first, owner)
+
+    const small = await countingQueries(() => listProjects(owner))
+
+    for (let index = 0; index < 4; index += 1) {
+      const extra = await createProject(owner, { name: `Extra ${index}` })
+      await putItem(extra, variantId, owner, { quantity: index + 1 })
+      await generateBoq(extra, owner)
+    }
+
+    const large = await countingQueries(() => listProjects(owner))
+
+    expect((await jsonOf<unknown[]>(small.result)).length).toBe(1)
+    expect((await jsonOf<unknown[]>(large.result)).length).toBe(5)
+    expect(large.queries).toBe(small.queries)
+  })
+})
+
+describe('batch item reader for other modules', () => {
+  it('returns an empty map for no ids without touching the database', async () => {
+    const { result, queries } = await countingQueries(() =>
+      listItemsForProjects([]),
+    )
+
+    expect(result.size).toBe(0)
+    expect(queries).toBe(0)
+  })
+
+  it('groups enriched items by project and omits projects with none', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const first = await seededProduct(admin, 'cement-tile', true)
+    const second = await seededProduct(admin, 'steel-bar', true)
+    const owner = await loginAs(OWNER)
+    const stocked = await createProject(owner, { name: 'Stocked' })
+    const empty = await createProject(owner, { name: 'Empty' })
+    await putItem(stocked, first.variantId, owner, { quantity: 2 })
+    await putItem(stocked, second.variantId, owner, { quantity: 5 })
+
+    const byProject = await listItemsForProjects([stocked, empty])
+
+    expect([...byProject.keys()]).toEqual([stocked])
+    const items = byProject.get(stocked) ?? []
+    expect(items).toHaveLength(2)
+    expect(
+      items.map(({ variantId, quantity, price }) => ({
+        variantId,
+        quantity,
+        price,
+      })),
+    ).toEqual(
+      expect.arrayContaining([
+        { variantId: first.variantId, quantity: 2, price: 14.25 },
+        { variantId: second.variantId, quantity: 5, price: 14.25 },
+      ]),
+    )
+    expect(items[0]).toMatchObject({
+      category: { slug: expect.stringContaining('category-') },
+      supplier: { slug: expect.stringContaining('supplier-') },
+      product: { status: 'published' },
+    })
+  })
+
+  it('omits an id that owns nothing and one that does not exist', async () => {
+    const owner = await loginAs(OWNER)
+    const id = await createProject(owner)
+
+    const byProject = await listItemsForProjects([
+      id,
+      '00000000-0000-4000-8000-000000000000',
+    ])
+
+    expect(byProject.size).toBe(0)
+  })
+
+  it('reads any number of projects in a fixed number of queries', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const first = await seededProduct(admin, 'cement-tile', true)
+    const second = await seededProduct(admin, 'steel-bar', true)
+    const owner = await loginAs(OWNER)
+    const ids: string[] = []
+    for (let index = 0; index < 5; index += 1) {
+      const id = await createProject(owner, { name: `Project ${index}` })
+      await putItem(id, first.variantId, owner, { quantity: index + 1 })
+      await putItem(id, second.variantId, owner, { quantity: index + 2 })
+      ids.push(id)
+    }
+
+    const one = await countingQueries(() =>
+      listItemsForProjects(ids.slice(0, 1)),
+    )
+    const five = await countingQueries(() => listItemsForProjects(ids))
+
+    expect(one.result.size).toBe(1)
+    expect(five.result.size).toBe(5)
+    expect([...five.result.values()].every((items) => items.length === 2)).toBe(
+      true,
+    )
+    expect(five.queries).toBe(one.queries)
   })
 })

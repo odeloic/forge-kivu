@@ -11,6 +11,7 @@ Backend changes in the `catalogue` module required by the workshop UI. Extends `
 5. **`q` is added to the existing product list query too.** The same search box appears in the shop; two search implementations would drift.
 6. **`VariantRef` gains `category`, `supplier` and `imageUrl`.** The projects module passes them straight through to the products tab (`workshop-projects-api-spec.md` decision 4). Loading them there would mean projects querying catalogue tables, which `projects-module-spec.md` decision 1 forbids.
 7. **A variant's image falls back to its product's first media.** `product_variants.imageMediaId` is nullable and rarely set; a row with no thumbnail at all reads as a missing product.
+8. **Only `ready` media resolves to a URL.** Both the variant image and the product cover go through `media.listReady`, so a media row that is still `pending` yields `null` rather than a link to an object that may not exist. This matches the product detail, which has always dropped non-ready media.
 
 ## Types
 
@@ -53,7 +54,20 @@ GET /catalogue/variants?q=&category=&supplier=&page=   new
 GET /catalogue/products?q=...                          changed: q added
 ```
 
-`q`: trimmed, 1–100 characters, optional. Matches `products.name` or `product_variants.sku`, case-insensitive, substring.
+`q`: trimmed, 1–100 characters, optional. ~~Matches `products.name` or `product_variants.sku`, case-insensitive, substring.~~
+
+Matches `products.name` or `product_variants.sku`, case-insensitive, substring,
+with `%`, `_` and `\` escaped so they match literally. What a match selects
+differs by route, because the two routes return different rows:
+
+- `GET /catalogue/products` keeps a product whose name matches, or which has any
+  variant whose sku matches. A sku hit brings back the whole product.
+- `GET /catalogue/variants` keeps a variant whose own sku matches, or whose
+  product name matches. A sku hit brings back that one variant, not its
+  siblings — the picker searches for a code to add that exact row.
+
+`GET /catalogue/variants` pages at 40, its own size (decision 2); the product
+list stays at 20.
 
 ## Implementation plan
 
@@ -65,8 +79,15 @@ Build: supplier, category and image joins in `getVariantRefs`, the fallback from
 
 Acceptance criteria:
 - `GET /projects/:id` on a project with items returns `category`, `supplier` and `imageUrl` per item (verified from the projects side).
-- A variant with `imageMediaId` set returns that image; unset returns the product's first media by `displayOrder`; a product with no media returns `null`.
-- `getVariantRefs` is still one round trip for the whole id list — ten ids do not produce ten queries.
+- A variant with `imageMediaId` set returns that image; unset returns the product's first media by ~~`displayOrder`~~ `product_media.sortOrder`, the column that actually orders product media; a product with no media returns `null`.
+- ~~`getVariantRefs` is still one round trip for the whole id list — ten ids do not produce ten queries.~~
+
+  `getVariantRefs` issues a fixed number of queries for the whole id list — ten
+  ids cost the same as one. It is five, not one: the variant rows, the option
+  labels, the supplier refs, the category tree, and the media rows. Supplier,
+  category and media belong to other modules and are read through their
+  services, which `apps/api/CLAUDE.md` requires; a single join would reach into
+  their tables.
 - A variant of a `not_available` product still resolves, with `product.status` unchanged.
 
 ### Step 2 — Text search on the product list
