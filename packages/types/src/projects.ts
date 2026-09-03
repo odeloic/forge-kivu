@@ -73,6 +73,8 @@ export const PROJECT_LIMITS = {
   description: 5000,
   budget: 9999999999.99,
   quantity: 1000000,
+  spaceName: 100,
+  spaces: 50,
 } as const
 
 export const projectFields = {
@@ -101,9 +103,14 @@ export const projectFields = {
     .multipleOf(0.01, 'Budget can have at most two decimals.'),
   quantity: z
     .number()
-    .int('Quantity must be a whole number.')
-    .min(1, 'Quantity must be at least 1.')
-    .max(PROJECT_LIMITS.quantity),
+    .min(0.01, 'Quantity must be at least 0.01.')
+    .max(PROJECT_LIMITS.quantity)
+    .multipleOf(0.01, 'Quantity can have at most two decimals.'),
+  spaceName: z
+    .string()
+    .trim()
+    .min(1, 'Name is required.')
+    .max(PROJECT_LIMITS.spaceName),
 }
 
 const atLeastOneField = (patch: object): boolean =>
@@ -138,7 +145,25 @@ export const updateProjectSchema = z
   .partial()
   .refine(atLeastOneField, { message: 'At least one field is required' })
 
-export const setItemSchema = z.object({ quantity: projectFields.quantity })
+export const setItemSchema = z.object({
+  quantity: projectFields.quantity,
+  spaceId: z.uuid().nullish(),
+})
+
+export const removeItemQuerySchema = z.object({ spaceId: z.uuid().optional() })
+
+export const createProjectSpaceSchema = z.object({
+  name: projectFields.spaceName,
+  spaceId: z.uuid().nullish(),
+})
+
+export const updateProjectSpaceSchema = z
+  .object({
+    name: projectFields.spaceName,
+    spaceId: z.uuid().nullable(),
+  })
+  .partial()
+  .refine(atLeastOneField, { message: 'At least one field is required' })
 
 export const setPhaseSchema = z.object({ completedOn: projectFields.date })
 
@@ -172,6 +197,9 @@ export const projectScheduleFormSchema = z
 export type CreateProjectInput = z.infer<typeof createProjectSchema>
 export type UpdateProjectInput = z.infer<typeof updateProjectSchema>
 export type SetItemInput = z.infer<typeof setItemSchema>
+export type RemoveItemQuery = z.infer<typeof removeItemQuerySchema>
+export type CreateProjectSpaceInput = z.infer<typeof createProjectSpaceSchema>
+export type UpdateProjectSpaceInput = z.infer<typeof updateProjectSpaceSchema>
 export type SetPhaseInput = z.infer<typeof setPhaseSchema>
 export type ProjectIdentityFormValues = z.output<
   typeof projectIdentityFormSchema

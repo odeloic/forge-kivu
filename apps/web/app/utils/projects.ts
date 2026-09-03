@@ -3,14 +3,14 @@ import {
   PROJECT_PHASES,
   PROJECT_TYPE_VALUES,
   PROJECT_TYPES,
+  calculateLineTotal,
+  sumAmounts,
   WORK_TYPE_VALUES,
   WORK_TYPES,
   type ProjectPhase,
   type ProjectType,
   type WorkType,
 } from '@forge-kivu/types'
-
-import { calculateLineTotal, sumAmounts } from './money'
 
 export const PROJECT_TYPE_LABELS: Record<ProjectType, string> = {
   [PROJECT_TYPES.RESIDENTIAL_HOUSE]: 'Residential house',

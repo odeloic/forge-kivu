@@ -1,10 +1,13 @@
 /**
  * FIXME: Refactor Highly suspicious
  */
-import type { AdminProductDetail } from '@forge-kivu/api-client'
+import type { AdminProductDetail, Unit } from '@forge-kivu/api-client'
 import {
+  ATTRIBUTE_VALUE_TYPES,
   setOptionsSchema,
   setSpecsSchema,
+  type SetOptionsInput,
+  type SetSpecsInput,
   variantsFormSchema,
   type VariantsFormValues,
 } from '@forge-kivu/types'
@@ -17,8 +20,11 @@ export type VariantDraft = {
   labels: string[]
   sku: string
   price: string | number
+  unitId: string
   imageMediaId: string | null
 }
+
+const DEFAULT_UNIT_SLUG = 'piece'
 
 export type SpecDraft = { attributeId: string; value: string }
 
@@ -48,13 +54,12 @@ const buildCombinations = (
 export const useProductSections = (
   product: Ref<AdminProductDetail | null | undefined>,
   save: {
-    options: (input: {
-      options: { name: string; values: string[] }[]
-    }) => Promise<void>
+    options: (input: SetOptionsInput) => Promise<void>
     variants: (input: VariantsFormValues) => Promise<void>
-    specs: (input: { specs: SpecDraft[] }) => Promise<void>
+    specs: (input: SetSpecsInput) => Promise<void>
     media: (input: { mediaIds: string[] }) => Promise<void>
   },
+  units: Ref<Unit[] | null | undefined>,
 ) => {
   const options = ref<OptionDraft[]>([])
   const variants = ref<VariantDraft[]>([])
@@ -85,6 +90,12 @@ export const useProductSections = (
     }))
   }
 
+  const defaultUnitId = computed(
+    () =>
+      (units.value ?? []).find((unit) => unit.slug === DEFAULT_UNIT_SLUG)?.id ??
+      '',
+  )
+
   const resetVariants = () => {
     const existing = new Map(
       (saved.value?.variants ?? []).map((variant) => [
@@ -105,6 +116,7 @@ export const useProductSections = (
             match?.price === null || match?.price === undefined
               ? ''
               : String(match.price),
+          unitId: match?.unit.id ?? defaultUnitId.value,
           imageMediaId: match?.imageMediaId ?? null,
         }
       },
@@ -134,6 +146,7 @@ export const useProductSections = (
   }
 
   watch(product, resetAll, { immediate: true })
+  watch(units, resetVariants)
 
   const saveOptions = async () => {
     issue.value = null
@@ -142,7 +155,8 @@ export const useProductSections = (
         .filter((option) => option.name.trim() !== '')
         .map((option) => ({
           name: option.name,
-          values: splitValues(option.values),
+          type: ATTRIBUTE_VALUE_TYPES.TEXT,
+          values: splitValues(option.values).map((value) => ({ value })),
         })),
     }
 

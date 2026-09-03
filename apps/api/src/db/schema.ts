@@ -26,6 +26,7 @@ export {
   projectPhase,
   projectPhases,
   projects,
+  projectSpaces,
   projectType,
   workType,
 } from '../modules/projects/projects.tables'
@@ -37,4 +38,10 @@ export {
   suppliers,
 } from '../modules/suppliers/suppliers.tables'
 
-export { categories, specAttributes } from '../modules/taxonomy/taxonomy.tables'
+export {
+  attributeValueType,
+  categories,
+  spaces,
+  specAttributes,
+  units,
+} from '../modules/taxonomy/taxonomy.tables'

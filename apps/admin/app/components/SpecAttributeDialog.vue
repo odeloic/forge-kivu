@@ -2,7 +2,11 @@
 import { useForm } from 'vee-validate'
 
 import type { SpecAttribute } from '@forge-kivu/api-client'
-import { attributeFormSchema, TAXONOMY_LIMITS } from '@forge-kivu/types'
+import {
+  ATTRIBUTE_VALUE_TYPES,
+  attributeFormSchema,
+  TAXONOMY_LIMITS,
+} from '@forge-kivu/types'
 
 const props = defineProps<{ editing: SpecAttribute | null }>()
 const emit = defineEmits<{ close: []; saved: [] }>()
@@ -25,6 +29,7 @@ const { defineField, errors, handleSubmit } = useForm({
     name: props.editing?.name ?? '',
     slug: props.editing?.slug ?? '',
     unit: props.editing?.unit ?? '',
+    type: props.editing?.type ?? ATTRIBUTE_VALUE_TYPES.TEXT,
   },
 })
 

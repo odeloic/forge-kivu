@@ -88,6 +88,22 @@ export type SpecAttribute = InferResponseType<
   200
 >[number]
 
+export type AttributeValueType = SpecAttribute['type']
+
+export type Unit = InferResponseType<ApiClient['units']['$get'], 200>[number]
+
+export type AdminUnit = InferResponseType<
+  ApiClient['admin']['units'][':id']['$patch'],
+  200
+>
+
+export type Space = InferResponseType<ApiClient['spaces']['$get'], 200>[number]
+
+export type AdminSpace = InferResponseType<
+  ApiClient['admin']['spaces'][':id']['$patch'],
+  200
+>
+
 export type Settings = InferResponseType<ApiClient['settings']['$get'], 200>
 
 export type Project = InferResponseType<ApiClient['projects']['$post'], 201>
@@ -103,6 +119,7 @@ export type ProjectDetail = InferResponseType<
 >
 
 export type ProjectItem = ProjectDetail['items'][number]
+export type ProjectSpace = ProjectDetail['spaces'][number]
 export type ProjectPhaseCompletion = ProjectDetail['phases'][number]
 
 export type BoqSummary = InferResponseType<

@@ -44,7 +44,7 @@ export const boqRoutes = new Hono()
       const file = await buildExport(
         c.req.valid('param').id,
         c.get('user').id,
-        c.req.valid('query').format,
+        c.req.valid('query'),
       )
       c.header('content-type', file.contentType)
       c.header('content-disposition', `attachment; filename="${file.filename}"`)

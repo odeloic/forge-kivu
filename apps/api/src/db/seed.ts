@@ -5,7 +5,13 @@ import { fileURLToPath } from 'node:url'
 import { parse } from 'yaml'
 import { z } from 'zod'
 
-import { ROLES, type Role } from '@forge-kivu/types'
+import {
+  ATTRIBUTE_VALUE_TYPES,
+  hexSchema,
+  OPTION_VALUE_TYPE_VALUES,
+  ROLES,
+  type Role,
+} from '@forge-kivu/types'
 
 import { client, db } from '.'
 import { env } from '../env'
@@ -30,8 +36,13 @@ import { suppliers } from '../modules/suppliers/suppliers.tables'
 import {
   createAttributeSchema,
   createCategorySchema,
+  createUnitSchema,
 } from '../modules/taxonomy/taxonomy.schemas'
-import { categories, specAttributes } from '../modules/taxonomy/taxonomy.tables'
+import {
+  categories,
+  specAttributes,
+  units,
+} from '../modules/taxonomy/taxonomy.tables'
 import { s3 } from '../storage'
 
 type SeedCategory = {
@@ -48,6 +59,8 @@ type SeedSupplier = {
 }
 
 type SeedSpecAttribute = z.infer<typeof createAttributeSchema>
+
+type SeedUnit = z.infer<typeof createUnitSchema>
 
 type SeedProduct = z.infer<typeof seedProductSchema>
 
@@ -116,6 +129,23 @@ const seedSuppliersSchema = z
     }
   })
 
+const seedUnitsSchema = z
+  .array(createUnitSchema)
+  .min(1)
+  .superRefine((items, ctx) => {
+    const slugs = new Set<string>()
+
+    for (const item of items) {
+      if (slugs.has(item.slug)) {
+        ctx.addIssue({
+          code: 'custom',
+          message: `Duplicate unit slug: ${item.slug}`,
+        })
+      }
+      slugs.add(item.slug)
+    }
+  })
+
 const seedSpecAttributesSchema = z
   .array(createAttributeSchema)
   .min(1)
@@ -147,10 +177,38 @@ const seedProductSchema = createProductSchema
     specs: z.record(z.string().min(1), z.string().min(1)).default({}),
     options: z
       .array(
-        z.object({
-          name: z.string().min(1),
-          values: z.array(z.string().min(1)).min(1),
-        }),
+        z
+          .object({
+            name: z.string().min(1),
+            type: z
+              .enum(OPTION_VALUE_TYPE_VALUES)
+              .default(ATTRIBUTE_VALUE_TYPES.TEXT),
+            values: z
+              .array(
+                z.union([
+                  z
+                    .string()
+                    .min(1)
+                    .transform((value) => ({ value, hex: undefined })),
+                  z.object({
+                    value: z.string().min(1),
+                    hex: hexSchema.optional(),
+                  }),
+                ]),
+              )
+              .min(1),
+          })
+          .superRefine((option, ctx) => {
+            const coloured = option.type === ATTRIBUTE_VALUE_TYPES.COLOR
+            for (const row of option.values) {
+              if (coloured ? row.hex === undefined : row.hex !== undefined) {
+                ctx.addIssue({
+                  code: 'custom',
+                  message: `${option.name}/${row.value} does not match the ${option.type} option type`,
+                })
+              }
+            }
+          }),
       )
       .default([]),
     variants: z
@@ -158,6 +216,7 @@ const seedProductSchema = createProductSchema
         z.object({
           sku: z.string().min(1),
           price: z.number().nonnegative(),
+          unit: z.string().min(1).default('piece'),
           options: z.record(z.string().min(1), z.string().min(1)).default({}),
         }),
       )
@@ -165,7 +224,10 @@ const seedProductSchema = createProductSchema
   })
   .superRefine((product, ctx) => {
     const declared = new Map(
-      product.options.map((option) => [option.name, new Set(option.values)]),
+      product.options.map((option) => [
+        option.name,
+        new Set(option.values.map((row) => row.value)),
+      ]),
     )
 
     for (const variant of product.variants) {
@@ -259,6 +321,14 @@ const loadSeedSuppliers = async (): Promise<SeedSupplier[]> => {
   return seedSuppliersSchema.parse(parse(source))
 }
 
+const loadSeedUnits = async (): Promise<SeedUnit[]> => {
+  const source = await Bun.file(
+    new URL('./seed-data/units.yaml', import.meta.url),
+  ).text()
+
+  return seedUnitsSchema.parse(parse(source))
+}
+
 const loadSeedSpecAttributes = async (): Promise<SeedSpecAttribute[]> => {
   const source = await Bun.file(
     new URL('./seed-data/spec-attributes.yaml', import.meta.url),
@@ -335,6 +405,30 @@ const seedSuppliers = async (items: SeedSupplier[]): Promise<number> =>
     return items.length
   })
 
+const seedUnits = async (items: SeedUnit[]): Promise<number> =>
+  db.transaction(async (tx) => {
+    for (const [sortOrder, item] of items.entries()) {
+      await tx
+        .insert(units)
+        .values({
+          name: item.name,
+          symbol: item.symbol,
+          slug: item.slug,
+          sortOrder: item.sortOrder ?? sortOrder,
+        })
+        .onConflictDoUpdate({
+          target: units.slug,
+          set: {
+            name: item.name,
+            symbol: item.symbol,
+            sortOrder: item.sortOrder ?? sortOrder,
+          },
+        })
+    }
+
+    return items.length
+  })
+
 const seedSpecAttributes = async (
   items: SeedSpecAttribute[],
 ): Promise<number> =>
@@ -342,10 +436,15 @@ const seedSpecAttributes = async (
     for (const item of items) {
       await tx
         .insert(specAttributes)
-        .values({ name: item.name, slug: item.slug, unit: item.unit ?? null })
+        .values({
+          name: item.name,
+          slug: item.slug,
+          unit: item.unit ?? null,
+          type: item.type,
+        })
         .onConflictDoUpdate({
           target: specAttributes.slug,
-          set: { name: item.name, unit: item.unit ?? null },
+          set: { name: item.name, unit: item.unit ?? null, type: item.type },
         })
     }
 
@@ -433,6 +532,11 @@ const seedProducts = async (
         .from(specAttributes)
     ).map((row) => [row.slug, row.id]),
   )
+  const unitIds = new Map(
+    (await db.select({ id: units.id, slug: units.slug }).from(units)).map(
+      (row) => [row.slug, row.id],
+    ),
+  )
   const mediaIds = new Map(seededMedia.map((row) => [row.key, row.id]))
 
   return db.transaction(async (tx) => {
@@ -488,6 +592,7 @@ const seedProducts = async (
           .values({
             productId: product.id,
             name: option.name,
+            type: option.type,
             sortOrder: index,
           })
           .returning({ id: productOptions.id })
@@ -498,9 +603,10 @@ const seedProducts = async (
         const values = await tx
           .insert(productOptionValues)
           .values(
-            option.values.map((value, order) => ({
+            option.values.map((entry, order) => ({
               optionId: row.id,
-              value,
+              value: entry.value,
+              hex: entry.hex ?? null,
               sortOrder: order,
             })),
           )
@@ -515,12 +621,18 @@ const seedProducts = async (
       }
 
       for (const [index, variant] of item.variants.entries()) {
+        const unitId = unitIds.get(variant.unit)
+        if (!unitId) {
+          throw new Error(`unknown unit for ${variant.sku}: ${variant.unit}`)
+        }
+
         const [row] = await tx
           .insert(productVariants)
           .values({
             productId: product.id,
             sku: variant.sku,
             price: variant.price,
+            unitId,
             sortOrder: index,
           })
           .returning({ id: productVariants.id })
@@ -575,6 +687,7 @@ if (env.NODE_ENV === 'production') {
 const seedEnv = seedEnvSchema.parse(process.env)
 const categoryRoots = await loadSeedCategories()
 const supplierProfiles = await loadSeedSuppliers()
+const unitDefinitions = await loadSeedUnits()
 const attributeDefinitions = await loadSeedSpecAttributes()
 const productDefinitions = await loadSeedProducts()
 
@@ -590,6 +703,7 @@ const basic = await seedUser(
 )
 const categoryCount = await seedCategories(categoryRoots)
 const supplierCount = await seedSuppliers(supplierProfiles)
+const unitCount = await seedUnits(unitDefinitions)
 const attributeCount = await seedSpecAttributes(attributeDefinitions)
 const seededMedia = await seedProductImages(admin.id)
 const productCount = await seedProducts(productDefinitions, seededMedia)
@@ -600,6 +714,7 @@ logger.info(
     basic: basic.email,
     categoryCount,
     supplierCount,
+    unitCount,
     attributeCount,
     mediaCount: seededMedia.length,
     productCount,

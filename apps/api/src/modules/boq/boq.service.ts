@@ -1,6 +1,14 @@
 import { asc, desc, eq, inArray, sql } from 'drizzle-orm'
 import ExcelJS from 'exceljs'
 
+import {
+  arrangeLines,
+  calculateLineTotal,
+  type BoqLineGroup,
+  type BoqOption,
+  sumLineTotals,
+} from '@forge-kivu/types'
+
 import { db } from '../../db'
 import { isUniqueViolation } from '../../db/errors'
 import { AppError } from '../../lib/errors'
@@ -17,12 +25,18 @@ import {
   type ProjectItem,
 } from '../projects/projects.service'
 import { getSettings } from '../settings/settings.service'
-import { EXPORT_FORMATS, type ExportFormat } from './boq.schemas'
+import {
+  type BoqColumn,
+  type BoqViewQuery,
+  EXPORT_FORMATS,
+  type ExportQuery,
+} from './boq.schemas'
 import { boqItems, boqs } from './boq.tables'
 
 export type Boq = typeof boqs.$inferSelect
 export type BoqItemRow = typeof boqItems.$inferSelect
-export type BoqItem = BoqItemRow & { current: { status: ProductStatus } | null }
+export type BoqCurrent = { status: ProductStatus; imageUrl: string | null }
+export type BoqItem = BoqItemRow & { current: BoqCurrent | null }
 export type BoqSummary = Boq & { lineCount: number; total: number }
 export type BoqProjectSummary = BoqSummary & { stale: boolean }
 export type BoqDetail = Boq & { items: BoqItem[]; total: number }
@@ -39,6 +53,13 @@ type FrozenItem = {
   sku: string | null
   unitPrice: number
   quantity: number
+  unit: string
+  spaceId: string | null
+  spaceName: string | null
+  supplierName: string
+  categoryName: string
+  categoryRootName: string
+  options: BoqOption[]
   sortOrder: number
 }
 
@@ -55,22 +76,20 @@ const itemName = (item: ProjectItem): string =>
 
 type Line = { unitPrice: number; quantity: number }
 
-type ComparableLine = Line & { variantId: string | null }
+type ComparableLine = Line & {
+  variantId: string | null
+  spaceId: string | null
+}
 
-const lineTotalCents = (line: Line): number =>
-  Math.round(line.unitPrice * 100) * line.quantity
-
-const totalOf = (lines: Line[]): number =>
-  lines.reduce((sum, line) => sum + lineTotalCents(line), 0) / 100
-
-const lineCents = sql`round(${boqItems.unitPrice} * 100) * ${boqItems.quantity}`
+const lineCents = sql`round(round(${boqItems.unitPrice} * 100) * ${boqItems.quantity})`
 
 const lineKey = (line: {
   variantId: string | null
+  spaceId: string | null
   quantity: number
   unitPrice: number | null
 }): string =>
-  `${line.variantId ?? ''}:${line.quantity}:${
+  `${line.variantId ?? ''}:${line.spaceId ?? ''}:${line.quantity}:${
     line.unitPrice === null ? '' : Math.round(line.unitPrice * 100)
   }`
 
@@ -97,6 +116,13 @@ const freezeItems = (items: ProjectItem[]): FrozenItem[] => {
       sku: item.sku,
       unitPrice: item.price,
       quantity: item.quantity,
+      unit: item.unit.symbol,
+      spaceId: item.space?.id ?? null,
+      spaceName: item.space?.name ?? null,
+      supplierName: item.supplier.name,
+      categoryName: item.category.name,
+      categoryRootName: item.categoryRoot.name,
+      options: item.options,
       sortOrder: index,
     }
   })
@@ -126,13 +152,13 @@ const findOwnedBoq = async (
 
 const withCurrent = (
   rows: BoqItemRow[],
-  statuses: Map<string, ProductStatus>,
+  currents: Map<string, BoqCurrent>,
 ): BoqItem[] =>
-  rows.map((row) => {
-    const status =
-      row.variantId === null ? undefined : statuses.get(row.variantId)
-    return { ...row, current: status ? { status } : null }
-  })
+  rows.map((row) => ({
+    ...row,
+    current:
+      row.variantId === null ? null : (currents.get(row.variantId) ?? null),
+  }))
 
 const loadItems = async (boqId: string): Promise<BoqItemRow[]> =>
   db
@@ -147,8 +173,11 @@ export const generate = async (
 ): Promise<BoqDetail> => {
   const source = await listItems(projectId, ownerId)
   const frozen = freezeItems(source)
-  const statuses = new Map(
-    source.map((item) => [item.variantId, item.product.status]),
+  const currents = new Map<string, BoqCurrent>(
+    source.map((item) => [
+      item.variantId,
+      { status: item.product.status, imageUrl: item.imageUrl },
+    ]),
   )
 
   for (let attempt = 1; ; attempt++) {
@@ -175,8 +204,8 @@ export const generate = async (
 
         return {
           ...boq,
-          items: withCurrent(items, statuses),
-          total: totalOf(items),
+          items: withCurrent(items, currents),
+          total: sumLineTotals(items),
         }
       })
     } catch (error) {
@@ -241,6 +270,7 @@ export const boqSummaries = async (
         revision: latest.revision,
         createdAt: latest.createdAt,
         variantId: boqItems.variantId,
+        spaceId: boqItems.spaceId,
         unitPrice: boqItems.unitPrice,
         quantity: boqItems.quantity,
       })
@@ -263,6 +293,7 @@ export const boqSummaries = async (
     if (row.unitPrice !== null && row.quantity !== null) {
       entry.lines.push({
         variantId: row.variantId,
+        spaceId: row.spaceId,
         unitPrice: row.unitPrice,
         quantity: row.quantity,
       })
@@ -277,6 +308,7 @@ export const boqSummaries = async (
       items.map((item) =>
         lineKey({
           variantId: item.variantId,
+          spaceId: item.space?.id ?? null,
           quantity: item.quantity,
           unitPrice: item.price,
         }),
@@ -290,7 +322,7 @@ export const boqSummaries = async (
       {
         ...entry.boq,
         lineCount: entry.lines.length,
-        total: totalOf(entry.lines),
+        total: sumLineTotals(entry.lines),
         stale: !sameLines(
           entry.lines.map(lineKey),
           current.get(projectId) ?? [],
@@ -312,14 +344,17 @@ export const getOwned = async (
     rows.flatMap((row) => (row.variantId === null ? [] : [row.variantId])),
   )
 
-  const statuses = new Map(
-    [...refs].map(([variantId, ref]) => [variantId, ref.product.status]),
+  const currents = new Map<string, BoqCurrent>(
+    [...refs].map(([variantId, ref]) => [
+      variantId,
+      { status: ref.product.status, imageUrl: ref.imageUrl },
+    ]),
   )
 
   return {
     ...found.boq,
-    items: withCurrent(rows, statuses),
-    total: totalOf(rows),
+    items: withCurrent(rows, currents),
+    total: sumLineTotals(rows),
   }
 }
 
@@ -335,26 +370,102 @@ const csvValue = (value: string | number | null): string => {
   return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text
 }
 
-const buildCsv = (items: BoqItemRow[]): ArrayBuffer => {
+const optionsText = (options: BoqOption[]): string =>
+  options.map((option) => `${option.name}: ${option.value}`).join('; ')
+
+const COLUMN_LABELS: Record<BoqColumn, string> = {
+  name: 'Name',
+  sku: 'SKU',
+  supplier: 'Supplier',
+  category: 'Category',
+  space: 'Space',
+  unit: 'Unit',
+  options: 'Options',
+  unitPrice: 'Unit price',
+  quantity: 'Quantity',
+  lineTotal: 'Line total',
+}
+
+const csvCell = (
+  item: BoqItemRow,
+  column: BoqColumn,
+): string | number | null => {
+  switch (column) {
+    case 'name':
+      return item.name
+    case 'sku':
+      return item.sku
+    case 'supplier':
+      return item.supplierName
+    case 'category':
+      return item.categoryName
+    case 'space':
+      return item.spaceName
+    case 'unit':
+      return item.unit
+    case 'options':
+      return optionsText(item.options)
+    case 'unitPrice':
+      return item.unitPrice.toFixed(2)
+    case 'quantity':
+      return item.quantity
+    case 'lineTotal':
+      return calculateLineTotal(item.unitPrice, item.quantity).toFixed(2)
+  }
+}
+
+const xlsxCell = (item: BoqItemRow, column: BoqColumn): string | number => {
+  switch (column) {
+    case 'sku':
+      return item.sku ?? ''
+    case 'space':
+      return item.spaceName ?? ''
+    case 'unitPrice':
+      return item.unitPrice
+    case 'quantity':
+      return item.quantity
+    case 'lineTotal':
+      return calculateLineTotal(item.unitPrice, item.quantity)
+    default:
+      return csvCell(item, column) ?? ''
+  }
+}
+
+const buildCsv = (items: BoqItemRow[], view: BoqViewQuery): ArrayBuffer => {
+  const groups = arrangeLines(items, view)
+  const header = [...(view.groupBy ? ['group'] : []), ...view.columns]
   const lines = [
-    'name,sku,unitPrice,quantity',
-    ...items.map((item) =>
-      [item.name, item.sku, item.unitPrice.toFixed(2), item.quantity]
-        .map(csvValue)
-        .join(','),
+    header.join(','),
+    ...groups.flatMap((group) =>
+      group.lines.map((item) =>
+        [
+          ...(view.groupBy ? [group.label] : []),
+          ...view.columns.map((column) => csvCell(item, column)),
+        ]
+          .map(csvValue)
+          .join(','),
+      ),
     ),
   ]
   return toArrayBuffer(new TextEncoder().encode(`${lines.join('\n')}\n`))
 }
+
+const amountRow = (
+  label: string,
+  amount: number,
+  columns: BoqColumn[],
+): (string | number)[] => [label, ...columns.slice(1, -1).map(() => ''), amount]
 
 const buildXlsx = async (
   project: Project,
   boq: Boq,
   items: BoqItemRow[],
   currency: string,
+  view: BoqViewQuery,
 ): Promise<ArrayBuffer> => {
   const workbook = new ExcelJS.Workbook()
   const sheet = workbook.addWorksheet(`BOQ r${boq.revision}`)
+  const groups: BoqLineGroup<BoqItemRow>[] = arrangeLines(items, view)
 
   sheet.addRow(['Project', project.name])
   sheet.addRow(['Client', project.clientName ?? ''])
@@ -362,17 +473,19 @@ const buildXlsx = async (
   sheet.addRow(['Date', boq.createdAt.toISOString().slice(0, 10)])
   sheet.addRow(['Currency', currency])
   sheet.addRow([])
-  sheet.addRow(['Name', 'SKU', 'Unit price', 'Quantity', 'Line total'])
-  for (const item of items) {
-    sheet.addRow([
-      item.name,
-      item.sku ?? '',
-      item.unitPrice,
-      item.quantity,
-      lineTotalCents(item) / 100,
-    ])
+  sheet.addRow(view.columns.map((column) => COLUMN_LABELS[column]))
+  for (const group of groups) {
+    if (view.groupBy) {
+      sheet.addRow([group.label]).font = { bold: true }
+    }
+    for (const item of group.lines) {
+      sheet.addRow(view.columns.map((column) => xlsxCell(item, column)))
+    }
+    if (view.groupBy) {
+      sheet.addRow(amountRow('Subtotal', group.subtotal, view.columns))
+    }
   }
-  sheet.addRow(['Total', '', '', '', totalOf(items)])
+  sheet.addRow(amountRow('Total', sumLineTotals(items), view.columns))
 
   return toArrayBuffer(new Uint8Array(await workbook.xlsx.writeBuffer()))
 }
@@ -386,7 +499,7 @@ const slugify = (name: string): string =>
 export const buildExport = async (
   id: string,
   ownerId: string,
-  format: ExportFormat,
+  { format, ...view }: ExportQuery,
 ): Promise<ExportFile> => {
   const found = await findOwnedBoq(id, ownerId)
   if (!found) throw new AppError('NOT_FOUND')
@@ -394,12 +507,13 @@ export const buildExport = async (
   const items = await loadItems(id)
   const buffer =
     format === EXPORT_FORMATS.CSV
-      ? buildCsv(items)
+      ? buildCsv(items, view)
       : await buildXlsx(
           found.project,
           found.boq,
           items,
           (await getSettings()).currency,
+          view,
         )
 
   const base = slugify(found.project.name) || 'project'

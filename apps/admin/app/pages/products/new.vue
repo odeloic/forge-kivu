@@ -13,13 +13,14 @@ const STEPS = [
 
 const { setOptions, setVariants, setSpecs, setMedia, publish } = useProducts()
 const { list: listSuppliers } = useSuppliers()
-const { tree, attributes } = useTaxonomy()
+const { tree, attributes, units: listUnits } = useTaxonomy()
 const { settings, load: loadSettings } = useSettings()
 
-const [suppliers, categories, specAttributes] = await Promise.all([
+const [suppliers, categories, specAttributes, units] = await Promise.all([
   useAsyncData('wizard-suppliers', () => listSuppliers()),
   useAsyncData('wizard-categories', () => tree()),
   useAsyncData('wizard-attributes', () => attributes()),
+  useAsyncData('wizard-units', () => listUnits()),
 ])
 await loadSettings()
 
@@ -31,21 +32,26 @@ const step = ref(1)
 const done = ref(0)
 const noOptions = ref(false)
 
-const sections = useProductSections(product, {
-  options: async (input) => {
-    if (product.value) product.value = await setOptions(product.value.id, input)
+const sections = useProductSections(
+  product,
+  {
+    options: async (input) => {
+      if (product.value)
+        product.value = await setOptions(product.value.id, input)
+    },
+    variants: async (input) => {
+      if (product.value)
+        product.value = await setVariants(product.value.id, input)
+    },
+    specs: async (input) => {
+      if (product.value) product.value = await setSpecs(product.value.id, input)
+    },
+    media: async (input) => {
+      if (product.value) product.value = await setMedia(product.value.id, input)
+    },
   },
-  variants: async (input) => {
-    if (product.value)
-      product.value = await setVariants(product.value.id, input)
-  },
-  specs: async (input) => {
-    if (product.value) product.value = await setSpecs(product.value.id, input)
-  },
-  media: async (input) => {
-    if (product.value) product.value = await setMedia(product.value.id, input)
-  },
-})
+  units.data,
+)
 
 const rail = computed(() =>
   STEPS.map((entry) => {
@@ -231,6 +237,7 @@ const priced = computed(
           v-model="sections.variants.value"
           :option-names="sections.optionNames.value"
           :currency="currency"
+          :units="units.data.value ?? []"
         />
       </fieldset>
     </template>

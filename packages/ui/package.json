@@ -9,6 +9,7 @@
     "typecheck": "nuxt typecheck"
   },
   "dependencies": {
+    "@forge-kivu/types": "workspace:*",
     "@vueuse/core": "14.4.0",
     "nuxt": "4.5.2",
     "reka-ui": "2.10.3",

@@ -29,7 +29,7 @@ const {
   setMedia,
 } = useProducts()
 const { list: listSuppliers } = useSuppliers()
-const { tree, attributes } = useTaxonomy()
+const { tree, attributes, units: listUnits } = useTaxonomy()
 const { settings, load: loadSettings } = useSettings()
 
 const { data, error, refresh } = await useAsyncData(
@@ -40,30 +40,35 @@ const { data, error, refresh } = await useAsyncData(
 
 if (error.value) throw error.value
 
-const [suppliers, categories, specAttributes] = await Promise.all([
+const [suppliers, categories, specAttributes, units] = await Promise.all([
   useAsyncData('product-suppliers', () => listSuppliers()),
   useAsyncData('product-categories', () => tree()),
   useAsyncData('product-attributes', () => attributes()),
+  useAsyncData('product-units', () => listUnits()),
 ])
 await loadSettings()
 
 const categoryRows = computed(() => flattenTree(categories.data.value ?? []))
 const currency = computed(() => settings.value?.currency ?? '')
 
-const sections = useProductSections(data, {
-  options: async (input) => {
-    data.value = await setOptions(id.value, input)
+const sections = useProductSections(
+  data,
+  {
+    options: async (input) => {
+      data.value = await setOptions(id.value, input)
+    },
+    variants: async (input) => {
+      data.value = await setVariants(id.value, input)
+    },
+    specs: async (input) => {
+      data.value = await setSpecs(id.value, input)
+    },
+    media: async (input) => {
+      data.value = await setMedia(id.value, input)
+    },
   },
-  variants: async (input) => {
-    data.value = await setVariants(id.value, input)
-  },
-  specs: async (input) => {
-    data.value = await setSpecs(id.value, input)
-  },
-  media: async (input) => {
-    data.value = await setMedia(id.value, input)
-  },
-})
+  units.data,
+)
 
 const TABS = [
   { value: 'details', label: 'Details' },
@@ -226,6 +231,7 @@ const updatedAt = computed(() =>
             v-model="sections.variants.value"
             :option-names="sections.optionNames.value"
             :currency="currency"
+            :units="units.data.value ?? []"
             :images="sections.media.value"
           />
           <div class="actions">

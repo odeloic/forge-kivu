@@ -430,8 +430,8 @@ describe('read and update a product as admin', () => {
 describe('options and variants', () => {
   const colorAndSize = {
     options: [
-      { name: 'Color', values: ['Red', 'Blue'] },
-      { name: 'Size', values: ['60x60', '30x30'] },
+      { name: 'Color', values: [{ value: 'Red' }, { value: 'Blue' }] },
+      { name: 'Size', values: [{ value: '60x60' }, { value: '30x30' }] },
     ],
   }
 
@@ -615,6 +615,45 @@ describe('options and variants', () => {
     expect((await detailOf(res)).variants).toMatchObject([
       { price: 9.99, sku: 'PLAIN', optionValueIds: [] },
     ])
+  })
+
+  it('stores piece when no unit is given and the chosen unit otherwise', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const data = await seed(admin)
+    const id = await createProduct(admin, data)
+    const unitList = (await (await app.request('/units')).json()) as {
+      id: string
+      slug: string
+    }[]
+    const metre = unitList.find((unit) => unit.slug === 'm')
+    if (!metre) throw new Error('metre unit is not seeded')
+
+    const created = await getProduct(id, admin)
+    const defaulted = await putVariants(id, admin, {
+      variants: [{ sku: 'PLAIN' }],
+    })
+    const chosen = await putVariants(id, admin, {
+      variants: [{ sku: 'ROLL', unitId: metre.id }],
+    })
+    const bogus = await putVariants(id, admin, {
+      variants: [
+        { sku: 'ROLL', unitId: '00000000-0000-4000-8000-000000000000' },
+      ],
+    })
+
+    expect((await detailOf(created)).variants).toMatchObject([
+      { unit: { name: 'Piece', symbol: 'pc' } },
+    ])
+    expect((await detailOf(defaulted)).variants).toMatchObject([
+      { sku: 'PLAIN', unit: { name: 'Piece', symbol: 'pc' } },
+    ])
+    expect((await detailOf(chosen)).variants).toMatchObject([
+      { sku: 'ROLL', unit: { id: metre.id, name: 'Metre', symbol: 'm' } },
+    ])
+    expect(bogus.status).toBe(400)
+    expect(await bogus.json()).toMatchObject({
+      error: { code: 'UNIT_NOT_FOUND' },
+    })
   })
 
   it('rejects a variant image that is not ready', async () => {
@@ -828,7 +867,9 @@ describe('publish and browse publicly', () => {
     const spread = await createProduct(admin, data, { slug: 'spread-tile' })
     const spreadOptions = await detailOf(
       await putOptions(spread, admin, {
-        options: [{ name: 'Size', values: ['Small', 'Large'] }],
+        options: [
+          { name: 'Size', values: [{ value: 'Small' }, { value: 'Large' }] },
+        ],
       }),
     )
     const sizeId = (value: string): string => {
@@ -1139,13 +1180,15 @@ describe('product facets', () => {
           slug: 'material',
           name: 'Material',
           unit: null,
-          values: [{ value: 'Wood', count: 2 }],
+          type: 'text',
+          values: [{ value: 'Wood', hex: null, count: 2 }],
         },
         {
           slug: 'width',
           name: 'Width',
           unit: 'cm',
-          values: [{ value: '120', count: 1 }],
+          type: 'text',
+          values: [{ value: '120', hex: null, count: 1 }],
         },
       ],
     })
@@ -1228,16 +1271,18 @@ describe('product facets', () => {
         slug: 'material',
         name: 'Material',
         unit: null,
+        type: 'text',
         values: [
-          { value: 'Wood', count: 2 },
-          { value: 'Steel', count: 1 },
+          { value: 'Wood', hex: null, count: 2 },
+          { value: 'Steel', hex: null, count: 1 },
         ],
       },
       {
         slug: 'width',
         name: 'Width',
         unit: 'cm',
-        values: [{ value: '120', count: 1 }],
+        type: 'text',
+        values: [{ value: '120', hex: null, count: 1 }],
       },
     ])
     expect(body.suppliers).toEqual([
@@ -1285,16 +1330,18 @@ describe('product facets', () => {
         slug: 'material',
         name: 'Material',
         unit: null,
+        type: 'text',
         values: [
-          { value: 'Wood', count: 2 },
-          { value: 'Steel', count: 1 },
+          { value: 'Wood', hex: null, count: 2 },
+          { value: 'Steel', hex: null, count: 1 },
         ],
       },
       {
         slug: 'width',
         name: 'Width',
         unit: 'cm',
-        values: [{ value: '120', count: 1 }],
+        type: 'text',
+        values: [{ value: '120', hex: null, count: 1 }],
       },
     ])
     expect(body.suppliers).toEqual([
@@ -1327,16 +1374,18 @@ describe('product facets', () => {
         slug: 'material',
         name: 'Material',
         unit: null,
+        type: 'text',
         values: [
-          { value: 'Steel', count: 1 },
-          { value: 'Wood', count: 1 },
+          { value: 'Steel', hex: null, count: 1 },
+          { value: 'Wood', hex: null, count: 1 },
         ],
       },
       {
         slug: 'width',
         name: 'Width',
         unit: 'cm',
-        values: [{ value: '120', count: 1 }],
+        type: 'text',
+        values: [{ value: '120', hex: null, count: 1 }],
       },
     ])
     expect(body.price).toEqual({ min: 10, max: 30 })
@@ -1369,16 +1418,18 @@ describe('product facets', () => {
         slug: 'material',
         name: 'Material',
         unit: null,
+        type: 'text',
         values: [
-          { value: 'Steel', count: 1 },
-          { value: 'Wood', count: 1 },
+          { value: 'Steel', hex: null, count: 1 },
+          { value: 'Wood', hex: null, count: 1 },
         ],
       },
       {
         slug: 'width',
         name: 'Width',
         unit: 'cm',
-        values: [{ value: '120', count: 1 }],
+        type: 'text',
+        values: [{ value: '120', hex: null, count: 1 }],
       },
     ])
   })
@@ -1406,16 +1457,18 @@ describe('product facets', () => {
         slug: 'material',
         name: 'Material',
         unit: null,
+        type: 'text',
         values: [
-          { value: 'Steel', count: 1 },
-          { value: 'Wood', count: 1 },
+          { value: 'Steel', hex: null, count: 1 },
+          { value: 'Wood', hex: null, count: 1 },
         ],
       },
       {
         slug: 'width',
         name: 'Width',
         unit: 'cm',
-        values: [{ value: '120', count: 1 }],
+        type: 'text',
+        values: [{ value: '120', hex: null, count: 1 }],
       },
     ])
     expect(body.price).toEqual({ min: 30, max: 30 })
@@ -1499,13 +1552,13 @@ describe('product facets', () => {
 
     const res = await facets()
     const body = (await res.json()) as {
-      attributes: { values: { value: string; count: number }[] }[]
+      attributes: { values: { value: string; hex: null; count: number }[] }[]
     }
 
     expect(body.attributes[0]?.values).toEqual([
-      { value: 'Steel', count: 2 },
-      { value: 'Aluminium', count: 1 },
-      { value: 'Zinc', count: 1 },
+      { value: 'Steel', hex: null, count: 2 },
+      { value: 'Aluminium', hex: null, count: 1 },
+      { value: 'Zinc', hex: null, count: 1 },
     ])
   })
 })
@@ -1518,7 +1571,7 @@ describe('delete a product', () => {
     const mediaId = await createReadyMedia(await loginAs(UPLOADER))
 
     const optionsRes = await putOptions(id, admin, {
-      options: [{ name: 'Color', values: ['Red'] }],
+      options: [{ name: 'Color', values: [{ value: 'Red' }] }],
     })
     const detail = await detailOf(optionsRes)
     const redId = detail.options[0]?.values[0]?.id as string
@@ -1573,7 +1626,11 @@ describe('variant references', () => {
   ): Promise<Detail> => {
     const id = await createProduct(admin, data)
     const withOptions = await detailOf(
-      await putOptions(id, admin, { options: [{ name: 'Color', values }] }),
+      await putOptions(id, admin, {
+        options: [
+          { name: 'Color', values: values.map((value) => ({ value })) },
+        ],
+      }),
     )
     return withOptions
   }
@@ -1848,7 +1905,7 @@ describe('text search on the public list', () => {
       { slug: 'kivu-tiles', name: 'Kivu Tiles', count: 1 },
     ])
     expect(body.attributes).toMatchObject([
-      { slug: 'material', values: [{ value: 'Ceramic', count: 1 }] },
+      { slug: 'material', values: [{ value: 'Ceramic', hex: null, count: 1 }] },
     ])
   })
 })
@@ -1886,7 +1943,11 @@ describe('the public variant list', () => {
   ): Promise<Detail> => {
     const id = await createProduct(admin, data, overrides)
     return detailOf(
-      await putOptions(id, admin, { options: [{ name: 'Color', values }] }),
+      await putOptions(id, admin, {
+        options: [
+          { name: 'Color', values: values.map((value) => ({ value })) },
+        ],
+      }),
     )
   }
 
@@ -1934,6 +1995,7 @@ describe('the public variant list', () => {
       variantId: attached.variants[0]?.id,
       sku: 'WC-0',
       price: 10,
+      unit: { id: expect.any(String), name: 'Piece', symbol: 'pc' },
       label: 'Charcoal',
       product: {
         id: withOptions.id,
@@ -2089,5 +2151,193 @@ describe('the public variant list', () => {
     expect(await skusFor('?q=wall-1')).toEqual(['WALL-1'])
     expect(await skusFor('?q=lake&supplier=lake-stone')).toEqual(['LAKE-1'])
     expect(await skusFor('?category=nothing-here')).toEqual([])
+  })
+})
+
+describe('typed options and specs', () => {
+  const postAttribute = async (
+    admin: string,
+    body: Record<string, unknown>,
+  ): Promise<string> => {
+    const res = await app.request(
+      '/admin/spec-attributes',
+      jsonRequest(body, admin),
+    )
+    if (res.status !== 201) {
+      throw new Error(`attribute create failed with status ${res.status}`)
+    }
+    return ((await res.json()) as { id: string }).id
+  }
+
+  it('stores a colour option with a normalised hex', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const data = await seed(admin)
+    const id = await createProduct(admin, data)
+
+    const res = await putOptions(id, admin, {
+      options: [
+        {
+          name: 'Colour',
+          type: 'color',
+          values: [{ value: 'Red', hex: '#FF0000' }],
+        },
+      ],
+    })
+
+    expect(res.status).toBe(200)
+    expect((await detailOf(res)).options).toMatchObject([
+      {
+        name: 'Colour',
+        type: 'color',
+        values: [{ value: 'Red', hex: '#ff0000' }],
+      },
+    ])
+  })
+
+  it('rejects a colour value without hex and a hex on a text option', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const data = await seed(admin)
+    const id = await createProduct(admin, data)
+
+    const missing = await putOptions(id, admin, {
+      options: [{ name: 'Colour', type: 'color', values: [{ value: 'Red' }] }],
+    })
+    const stray = await putOptions(id, admin, {
+      options: [{ name: 'Size', values: [{ value: 'Big', hex: '#000000' }] }],
+    })
+    const malformed = await putOptions(id, admin, {
+      options: [
+        {
+          name: 'Colour',
+          type: 'color',
+          values: [{ value: 'Red', hex: 'red' }],
+        },
+      ],
+    })
+
+    expect(missing.status).toBe(400)
+    expect(await missing.json()).toMatchObject({
+      error: { code: 'OPTION_VALUE_INVALID' },
+    })
+    expect(stray.status).toBe(400)
+    expect(await stray.json()).toMatchObject({
+      error: { code: 'OPTION_VALUE_INVALID' },
+    })
+    expect(malformed.status).toBe(400)
+  })
+
+  it('validates spec values against the attribute type', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const data = await seed(admin)
+    const id = await createProduct(admin, data)
+    const weight = await postAttribute(admin, {
+      name: 'Weight',
+      slug: 'weight',
+      type: 'number',
+      unit: 'kg',
+    })
+    const span = await postAttribute(admin, {
+      name: 'Span',
+      slug: 'span',
+      type: 'range',
+      unit: 'mm',
+    })
+    const outdoor = await postAttribute(admin, {
+      name: 'Outdoor',
+      slug: 'outdoor',
+      type: 'boolean',
+    })
+    const tint = await postAttribute(admin, {
+      name: 'Tint',
+      slug: 'tint',
+      type: 'color',
+    })
+
+    const untyped = await putSpecs(id, admin, {
+      specs: [{ attributeId: weight, value: '12' }],
+    })
+    const reversed = await putSpecs(id, admin, {
+      specs: [{ attributeId: span, value: '10-5', valueMin: 10, valueMax: 5 }],
+    })
+    const stored = await putSpecs(id, admin, {
+      specs: [
+        { attributeId: data.material, value: 'Wood', valueNumber: 3 },
+        { attributeId: weight, value: '12 kg', valueNumber: 12.5 },
+        { attributeId: span, value: '5-10', valueMin: 5, valueMax: 10 },
+        { attributeId: outdoor, value: 'Yes', valueBool: true },
+        { attributeId: tint, value: 'Sea', hex: '#0044AA' },
+      ],
+    })
+
+    expect(untyped.status).toBe(400)
+    expect(await untyped.json()).toMatchObject({
+      error: { code: 'SPEC_VALUE_INVALID' },
+    })
+    expect(reversed.status).toBe(400)
+    expect(await reversed.json()).toMatchObject({
+      error: { code: 'SPEC_VALUE_INVALID' },
+    })
+    expect(stored.status).toBe(200)
+    const specs = (await detailOf(stored)).specs as Record<string, unknown>[]
+    expect(
+      specs.find((row) => row.attributeId === data.material),
+    ).toMatchObject({
+      type: 'text',
+      value: 'Wood',
+      valueNumber: null,
+      hex: null,
+    })
+    expect(specs.find((row) => row.attributeId === weight)).toMatchObject({
+      type: 'number',
+      unit: 'kg',
+      valueNumber: 12.5,
+    })
+    expect(specs.find((row) => row.attributeId === span)).toMatchObject({
+      type: 'range',
+      valueMin: 5,
+      valueMax: 10,
+      valueNumber: null,
+    })
+    expect(specs.find((row) => row.attributeId === outdoor)).toMatchObject({
+      type: 'boolean',
+      valueBool: true,
+    })
+    expect(specs.find((row) => row.attributeId === tint)).toMatchObject({
+      type: 'color',
+      hex: '#0044aa',
+    })
+    const rows = await db.select().from(productSpecs)
+    expect(
+      rows.find((row) => row.attributeId === data.material)?.valueNumber,
+    ).toBeNull()
+  })
+
+  it('exposes the attribute type and colour hex on facets', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const data = await seed(admin)
+    await showSupplier(data.supplierId)
+    const tint = await postAttribute(admin, {
+      name: 'Tint',
+      slug: 'tint',
+      type: 'color',
+    })
+    const id = await createProduct(admin, data)
+    await putSpecs(id, admin, {
+      specs: [{ attributeId: tint, value: 'Sea', hex: '#0044aa' }],
+    })
+    await publishProduct(id, admin)
+
+    const res = await app.request('/catalogue/products/facets')
+    const body = (await res.json()) as { attributes: Record<string, unknown>[] }
+
+    expect(body.attributes).toEqual([
+      {
+        slug: 'tint',
+        name: 'Tint',
+        unit: null,
+        type: 'color',
+        values: [{ value: 'Sea', hex: '#0044aa', count: 1 }],
+      },
+    ])
   })
 })

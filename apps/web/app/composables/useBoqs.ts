@@ -1,5 +1,9 @@
 import type { BoqDetail, BoqSummary } from '@forge-kivu/api-client'
-import type { ExportFormat } from '@forge-kivu/types'
+import {
+  type BoqViewQuery,
+  type ExportFormat,
+  serialiseBoqView,
+} from '@forge-kivu/types'
 
 export const useBoqs = () => {
   const api = useApi()
@@ -27,8 +31,14 @@ export const useBoqs = () => {
     return res.json()
   }
 
-  const exportUrl = (id: string, format: ExportFormat): string =>
-    `${config.public.apiBase}/boqs/${id}/export?format=${format}`
+  const exportUrl = (
+    id: string,
+    format: ExportFormat,
+    view: Partial<BoqViewQuery> = {},
+  ): string => {
+    const params = new URLSearchParams({ format, ...serialiseBoqView(view) })
+    return `${config.public.apiBase}/boqs/${id}/export?${params.toString()}`
+  }
 
   return { listForProject, detail, generate, exportUrl }
 }

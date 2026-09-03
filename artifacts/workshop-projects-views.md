@@ -9,7 +9,8 @@
 - `project_items` gets a nullable `space_id` → `project_spaces`. Null means unassigned.
 - The same variant may appear in several spaces of one project. `project_items` moves from PK `(project_id, variant_id)` to a surrogate `id` with `unique (project_id, variant_id, space_id) nulls not distinct`. Quantity is per (variant, space).
 - Deleting a project space sets `space_id` to null on its items (`on delete set null`); items are never lost with the space.
-- `boq_items` snapshots the space as `space_name text` (same pattern as `name`/`sku`), no FK, so a BOQ revision stays readable after spaces are renamed or removed.
+- ~~`boq_items` snapshots the space as `space_name text` (same pattern as `name`/`sku`), no FK, so a BOQ revision stays readable after spaces are renamed or removed.~~
+  `boq_items` snapshots the space as `space_name text` plus `space_id uuid` (no FK), so a BOQ revision stays readable after spaces are renamed or removed and the stale check can key on the id: renaming a space does not mark the revision stale, moving an item does.
 - Product-level "suitable for" hint (`product_spaces` → canonical spaces) is deferred.
 
 ## Typed attributes and colours
@@ -59,6 +60,7 @@
 - Column ids are the frozen `boq_items` fields: `name, sku, supplier, category, space, unit, options, unit_price, quantity, line_total`. `name` and `line_total` cannot be unselected; everything else can.
 - xlsx: header block as today, then one section per group (group header row, its lines, subtotal row), then the grand total row. Ungrouped output is a single section without header or subtotal rows.
 - csv: flat rows in the selected columns and sort; when grouped, the group value is prepended as the first column. No subtotal rows.
+  The prepended value is the group label, so empty keys read `Unassigned` (space) or `No colour` (color), matching the xlsx header rows.
 - Sorting is applied inside each group on the server; the web table uses the same comparator so the screen and the sheet order lines identically.
 - The gallery view exports exactly like the table; `view` does not influence the file.
 
@@ -88,7 +90,8 @@ Build:
 - BOQ: `freezeItems` copies `unit: ref.unit.symbol`; line totals become `Math.round(Math.round(unitPrice * 100) * quantity)` cents in TS and `round(round(unit_price * 100) * quantity)` in SQL; csv gains a `unit` column, xlsx a `Unit` column after Quantity.
 - Seed: `products.yaml` variants accept `unit: <slug>` (default piece); `seed.ts` inserts units from a new `seed-data/units.yaml`.
 - api-client: export `Unit`, `AdminUnit`.
-- Admin/web adaptation: `variantsFormSchema` mapping sends `unitId`; `calculateLineTotal` in `apps/web/app/utils` uses the new rounding; quantity inputs get `step="0.01"`.
+- ~~Admin/web adaptation: `variantsFormSchema` mapping sends `unitId`; `calculateLineTotal` in `apps/web/app/utils` uses the new rounding; quantity inputs get `step="0.01"`.~~
+  Admin/web adaptation: `variantsFormSchema` requires `unitId`, so `ProductVariantsTable` gains the Unit select (preselecting piece) and both product pages load `GET /units`; `calculateLineTotal` in `apps/web/app/utils` uses the new rounding; quantity inputs get `step="0.01"`.
 
 Acceptance criteria:
 - `GET /units` returns the eleven seeded units in `sort_order`; anonymous allowed.
@@ -106,6 +109,7 @@ Build:
 - `packages/types/src/catalogue.ts`: `setOptionsSchema` options gain `type`, values become `{ value, hex? }`; `setSpecsSchema` specs become `{ attributeId, value, hex?, valueNumber?, valueMin?, valueMax?, valueBool? }`. A `specValueForType(type)` refinement in `@forge-kivu/types` is the single validator: `color` requires `hex`; `number` requires `valueNumber`; `range` requires `valueMin ≤ valueMax`; `boolean` requires `valueBool`; `text` forbids all typed fields. Fields that do not apply are stripped, not rejected.
 - Catalogue service: `setOptions` rejects `hex` on non-colour options and requires it on colour options (400 `OPTION_VALUE_INVALID`); `setSpecs` loads attribute types and applies `specValueForType` (400 `SPEC_VALUE_INVALID`). `ProductOptionResponse.type`, option values `.hex`, `ProductSpecResponse.type` + typed fields.
 - Taxonomy service: `updateAttribute` with a `type` change while `product_specs` rows reference the attribute returns 409 `ATTRIBUTE_TYPE_LOCKED`. Options need no guard: `setOptions` rewrites every option and value in one call.
+  The usage check is a raw `exists` over `product_specs` inside the taxonomy service; importing the catalogue service would close a cycle (catalogue already depends on taxonomy).
 - Facets: `AttributeFacet.type`; `FacetValue.hex` (grouped on `(attributeId, value, hex)`); numeric attributes keep equality faceting for now.
 - `variantLabels` unchanged (label stays text).
 - Seed: `spec-attributes.yaml` entries gain `type`; `products.yaml` colour options become `type: color` with `values: [{ value: Forest Green, hex: '#2e5e3a' }, …]`; `seed.ts` schemas updated.
@@ -128,7 +132,8 @@ Build:
 - Taxonomy service/routes: `listSpaces`, `createSpace`, `updateSpace`, `removeSpace` (409 `SPACE_IN_USE` when a project space links it); `GET /spaces` public, `POST/PATCH/DELETE /admin/spaces[/:id]`.
 - Projects service: `createSpace`, `updateSpace`, `removeSpace` (owner-checked; 409 `PROJECT_SPACE_DUPLICATE` on the name index; 404 for a `spaceId` that is not a canonical space); `setItem(id, ownerId, variantId, { quantity, spaceId })` upserts on `(project_id, variant_id, space_id)` and 404s when `spaceId` is not one of this project's spaces; `removeItem` takes the optional `spaceId`; `ProjectItem` gains `id` and `space: { id, name } | null`; `ProjectDetail.spaces: ProjectSpace[]`.
 - Routes: `POST /projects/:id/spaces`, `PATCH /projects/:id/spaces/:spaceId`, `DELETE /projects/:id/spaces/:spaceId`; `PUT /projects/:id/items/:variantId` (body gains `spaceId`), `DELETE /projects/:id/items/:variantId?spaceId=`.
-- BOQ: `lineKey` includes `spaceId` so moving an item marks the latest revision stale; `freezeItems` copies `spaceName` (null when unassigned); `boq_items.space_name text` added here, not in slice 4, so the stale check and the snapshot ship together.
+- ~~BOQ: `lineKey` includes `spaceId` so moving an item marks the latest revision stale; `freezeItems` copies `spaceName` (null when unassigned); `boq_items.space_name text` added here, not in slice 4, so the stale check and the snapshot ship together.~~
+  BOQ: `lineKey` includes `spaceId` so moving an item marks the latest revision stale; `freezeItems` copies `spaceId` and `spaceName` (both null when unassigned); `boq_items.space_id uuid` (no FK) and `boq_items.space_name text` added here, not in slice 4, so the stale check and the snapshot ship together.
 - api-client: `Space`, `ProjectSpace`, updated `ProjectDetail`.
 - Web adaptation: `useProjects.setItem/removeItem` pass through `spaceId` (undefined today).
 
@@ -161,7 +166,8 @@ Acceptance criteria:
 ### Slice 5 — Export mirrors the view
 
 Build:
-- `packages/types/src/boq.ts`: `BOQ_COLUMNS` (`name, sku, supplier, category, space, unit, options, unitPrice, quantity, lineTotal`), `BOQ_LOCKED_COLUMNS = [name, lineTotal]`, `BOQ_GROUPS` (`space, supplier, category, color`), `BOQ_SORT_FIELDS` (`sortOrder, name, supplier, category, space, unitPrice, quantity, lineTotal`), `boqViewQuerySchema { columns?: csv list, groupBy?, sort?: "field:asc|desc" }` with defaults (all columns, no group, `sortOrder:asc`) and a transform that always re-adds the locked columns. `exportQuerySchema` becomes `boqViewQuerySchema.extend({ format })`.
+- ~~`packages/types/src/boq.ts`: `BOQ_COLUMNS` (`name, sku, supplier, category, space, unit, options, unitPrice, quantity, lineTotal`), `BOQ_LOCKED_COLUMNS = [name, lineTotal]`, `BOQ_GROUPS` (`space, supplier, category, color`), `BOQ_SORT_FIELDS` (`sortOrder, name, supplier, category, space, unitPrice, quantity, lineTotal`), `boqViewQuerySchema { columns?: csv list, groupBy?, sort?: "field:asc|desc" }` with defaults (all columns, no group, `sortOrder:asc`) and a transform that always re-adds the locked columns. `exportQuerySchema` becomes `boqViewQuerySchema.extend({ format })`.~~
+  `packages/types/src/boq.ts`: `BOQ_COLUMNS` (`name, sku, supplier, category, space, unit, options, unitPrice, quantity, lineTotal`), `BOQ_LOCKED_COLUMNS = [name, lineTotal]`, `BOQ_GROUPS` (`space, supplier, category, color`), `BOQ_SORT_FIELDS` (`sortOrder, name, supplier, category, space, unitPrice, quantity, lineTotal`), `boqViewQuerySchema { view?: gallery|boq (unknown → gallery), columns?: csv list, groupBy?, sort?: "field:asc|desc" }` with defaults (all columns, no group, `sortOrder:asc`) and a transform that always re-adds the locked columns in canonical order. Because the schema carries a transform, `exportQuerySchema` is built from the shared `boqViewQueryShape` plus `format` rather than by `.extend`. `serialiseBoqView` is the inverse used by the web `exportUrl`.
 - Pure functions next to the schema, over a minimal `BoqLineView` structural type so web and api share them: `groupKey(line, groupBy)` (`color` reads the option whose `type` is `color`, label `value`, unassigned/absent → `''` sorted last), `compareLines(sort)`, `arrangeLines(lines, view) → { key, label, lines, subtotal }[]`.
 - BOQ service: `buildCsv(items, view)` emits only selected columns in view order with a leading `group` column when grouped; `buildXlsx` emits one section per group (bold group header row, lines, `Subtotal` row) and the grand total row; ungrouped output has no header/subtotal rows. Route validates `exportQuerySchema`.
 - `useBoqs.exportUrl(id, format, view)` serialises the view from the route query; `ProjectBoqsTab` passes the current query (no controls yet).

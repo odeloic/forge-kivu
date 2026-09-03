@@ -58,18 +58,24 @@ export const useProjects = () => {
     id: string,
     variantId: string,
     quantity: number,
+    spaceId?: string | null,
   ): Promise<ProjectItem> => {
     const res = await api.projects[':id'].items[':variantId'].$put({
       param: { id, variantId },
-      json: { quantity },
+      json: { quantity, spaceId },
     })
     if (!res.ok) throw await toApiError(res)
     return res.json()
   }
 
-  const removeItem = async (id: string, variantId: string): Promise<void> => {
+  const removeItem = async (
+    id: string,
+    variantId: string,
+    spaceId?: string,
+  ): Promise<void> => {
     const res = await api.projects[':id'].items[':variantId'].$delete({
       param: { id, variantId },
+      query: spaceId ? { spaceId } : {},
     })
     if (!res.ok) throw await toApiError(res)
   }

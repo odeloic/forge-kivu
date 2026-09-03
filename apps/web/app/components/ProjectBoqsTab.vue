@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import type { BoqItem, BoqSummary } from '@forge-kivu/api-client'
-import { EXPORT_FORMATS, PRODUCT_STATUSES } from '@forge-kivu/types'
+import {
+  boqViewQuerySchema,
+  calculateLineTotal,
+  EXPORT_FORMATS,
+  PRODUCT_STATUSES,
+} from '@forge-kivu/types'
 
 const props = defineProps<{
   revisions: BoqSummary[]
@@ -37,6 +42,11 @@ const isWithdrawn = (item: BoqItem) =>
 const summary = computed(
   () => props.revisions.find((row) => row.id === selectedId.value) ?? null,
 )
+
+const view = computed(() => {
+  const parsed = boqViewQuerySchema.safeParse(route.query)
+  return parsed.success ? parsed.data : boqViewQuerySchema.parse({})
+})
 </script>
 
 <template>
@@ -85,10 +95,14 @@ const summary = computed(
           </span>
           <div class="spacer" />
           <UiButton as-child>
-            <a :href="exportUrl(boq.id, EXPORT_FORMATS.XLSX)">Export XLSX</a>
+            <a :href="exportUrl(boq.id, EXPORT_FORMATS.XLSX, view)"
+              >Export XLSX</a
+            >
           </UiButton>
           <UiButton as-child>
-            <a :href="exportUrl(boq.id, EXPORT_FORMATS.CSV)">Export CSV</a>
+            <a :href="exportUrl(boq.id, EXPORT_FORMATS.CSV, view)"
+              >Export CSV</a
+            >
           </UiButton>
         </div>
 

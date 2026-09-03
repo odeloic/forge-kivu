@@ -1,4 +1,5 @@
 import {
+  boolean,
   integer,
   numeric,
   pgEnum,
@@ -10,11 +11,20 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core'
 
-import { PRODUCT_STATUSES, type ProductStatus } from '@forge-kivu/types'
+import {
+  ATTRIBUTE_VALUE_TYPES,
+  PRODUCT_STATUSES,
+  type ProductStatus,
+} from '@forge-kivu/types'
 
 import { media } from '../media/media.tables'
 import { suppliers } from '../suppliers/suppliers.tables'
-import { categories, specAttributes } from '../taxonomy/taxonomy.tables'
+import {
+  attributeValueType,
+  categories,
+  specAttributes,
+  units,
+} from '../taxonomy/taxonomy.tables'
 
 export { PRODUCT_STATUSES, type ProductStatus }
 
@@ -55,6 +65,9 @@ export const productOptions = pgTable('product_options', {
     .notNull()
     .references(() => products.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
+  type: attributeValueType('type')
+    .notNull()
+    .default(ATTRIBUTE_VALUE_TYPES.TEXT),
   sortOrder: integer('sort_order').notNull().default(0),
 })
 
@@ -64,6 +77,7 @@ export const productOptionValues = pgTable('product_option_values', {
     .notNull()
     .references(() => productOptions.id, { onDelete: 'cascade' }),
   value: text('value').notNull(),
+  hex: text('hex'),
   sortOrder: integer('sort_order').notNull().default(0),
 })
 
@@ -77,6 +91,9 @@ export const productVariants = pgTable('product_variants', {
   imageMediaId: uuid('image_media_id').references(() => media.id, {
     onDelete: 'set null',
   }),
+  unitId: uuid('unit_id')
+    .notNull()
+    .references(() => units.id, { onDelete: 'restrict' }),
   sortOrder: integer('sort_order').notNull().default(0),
 })
 
@@ -103,6 +120,23 @@ export const productSpecs = pgTable(
       .notNull()
       .references(() => specAttributes.id, { onDelete: 'restrict' }),
     value: text('value').notNull(),
+    hex: text('hex'),
+    valueNumber: numeric('value_number', {
+      precision: 14,
+      scale: 4,
+      mode: 'number',
+    }),
+    valueMin: numeric('value_min', {
+      precision: 14,
+      scale: 4,
+      mode: 'number',
+    }),
+    valueMax: numeric('value_max', {
+      precision: 14,
+      scale: 4,
+      mode: 'number',
+    }),
+    valueBool: boolean('value_bool'),
   },
   (table) => [primaryKey({ columns: [table.productId, table.attributeId] })],
 )

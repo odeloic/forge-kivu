@@ -1,4 +1,4 @@
-import type { CategoryNode, SpecAttribute } from '@forge-kivu/api-client'
+import type { CategoryNode, SpecAttribute, Unit } from '@forge-kivu/api-client'
 import type {
   CreateAttributeInput,
   CreateCategoryInput,
@@ -53,6 +53,12 @@ export const useTaxonomy = () => {
     return res.json()
   }
 
+  const units = async (): Promise<Unit[]> => {
+    const res = await api.units.$get()
+    if (!res.ok) throw await toApiError(res)
+    return res.json()
+  }
+
   const createCategory = async (input: CreateCategoryInput): Promise<void> => {
     const res = await api.admin.categories.$post({ json: input })
     if (!res.ok) throw await toApiError(res)
@@ -102,6 +108,7 @@ export const useTaxonomy = () => {
   return {
     tree,
     attributes,
+    units,
     createCategory,
     updateCategory,
     removeCategory,

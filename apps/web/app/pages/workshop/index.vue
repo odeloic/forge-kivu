@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { sumAmounts } from '@forge-kivu/types'
+
 definePageMeta({ access: 'authenticated', layout: 'workshop' })
 
 const RECENT_LIMIT = 5

@@ -1,0 +1,43 @@
+- name: Piece
+  symbol: pc
+  slug: piece
+
+- name: Metre
+  symbol: m
+  slug: m
+
+- name: Square metre
+  symbol: m²
+  slug: m2
+
+- name: Cubic metre
+  symbol: m³
+  slug: m3
+
+- name: Kilogram
+  symbol: kg
+  slug: kg
+
+- name: Tonne
+  symbol: t
+  slug: tonne
+
+- name: Litre
+  symbol: L
+  slug: litre
+
+- name: Bag
+  symbol: bag
+  slug: bag
+
+- name: Roll
+  symbol: roll
+  slug: roll
+
+- name: Sheet
+  symbol: sheet
+  slug: sheet
+
+- name: Set
+  symbol: set
+  slug: set

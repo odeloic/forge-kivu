@@ -89,9 +89,10 @@ const quantityOf = (line: ProjectLine): string =>
 const setQuantity = (variantId: string, value: string) => {
   drafts[variantId] = value
 
-  const quantity = Number.parseInt(value, 10)
-  if (!Number.isInteger(quantity)) return
-  if (quantity < 1 || quantity > PROJECT_LIMITS.quantity) return
+  const quantity = Number(value)
+  if (!Number.isFinite(quantity)) return
+  if (quantity < 0.01 || quantity > PROJECT_LIMITS.quantity) return
+  if (Math.round(quantity * 100) !== quantity * 100) return
 
   lines.value = lines.value.map((line) =>
     line.variantId === variantId ? { ...line, quantity } : line,
@@ -224,8 +225,10 @@ const lineCaption = (line: ProjectLine) =>
             <td>
               <input
                 class="qty"
-                type="text"
-                inputmode="numeric"
+                type="number"
+                inputmode="decimal"
+                step="0.01"
+                min="0.01"
                 :aria-label="`Quantity for ${line.name}`"
                 :value="quantityOf(line)"
                 @input="

@@ -1,10 +1,11 @@
-import { eq, sql } from 'drizzle-orm'
+import { eq, notInArray, sql } from 'drizzle-orm'
 
 import { app } from '../app'
 import { db } from '../db'
 import { outbox } from '../lib/mail'
 import { ROLES, type Role } from '@forge-kivu/types'
 import { users } from '../modules/auth/auth.tables'
+import { units } from '../modules/taxonomy/taxonomy.tables'
 
 export type TestUser = {
   email: string
@@ -15,10 +16,25 @@ export type TestUser = {
 /**
  * Isn't this a recipe for disaster?
  */
+export const SEEDED_UNIT_SLUGS = [
+  'piece',
+  'm',
+  'm2',
+  'm3',
+  'kg',
+  'tonne',
+  'litre',
+  'bag',
+  'roll',
+  'sheet',
+  'set',
+] as const
+
 export const resetDatabase = async (): Promise<void> => {
   await db.execute(
-    sql`truncate table "boq_items", "boqs", "project_items", "project_phases", "projects", "product_media", "product_specs", "variant_option_values", "product_variants", "product_option_values", "product_options", "products", "spec_attributes", "categories", "supplier_gallery_items", "suppliers", "media", "password_reset_tokens", "sessions", "users" cascade`,
+    sql`truncate table "boq_items", "boqs", "project_items", "project_spaces", "project_phases", "projects", "spaces", "product_media", "product_specs", "variant_option_values", "product_variants", "product_option_values", "product_options", "products", "spec_attributes", "categories", "supplier_gallery_items", "suppliers", "media", "password_reset_tokens", "sessions", "users" cascade`,
   )
+  await db.delete(units).where(notInArray(units.slug, [...SEEDED_UNIT_SLUGS]))
   outbox.length = 0
 }
 

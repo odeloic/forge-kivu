@@ -1,4 +1,4 @@
-import { asc, eq } from 'drizzle-orm'
+import { asc, eq, sql } from 'drizzle-orm'
 
 import { db } from '../../db'
 import {
@@ -10,18 +10,29 @@ import { AppError } from '../../lib/errors'
 import type {
   CreateAttributeInput,
   CreateCategoryInput,
+  CreateSpaceInput,
+  CreateUnitInput,
   UpdateAttributeInput,
   UpdateCategoryInput,
+  UpdateSpaceInput,
+  UpdateUnitInput,
 } from './taxonomy.schemas'
 import {
   categories,
+  spaces,
   SPEC_ATTRIBUTE_NAME_INDEX,
   specAttributes,
+  units,
 } from './taxonomy.tables'
 
 export type Category = typeof categories.$inferSelect
 export type CategoryNode = Category & { children: CategoryNode[] }
 export type SpecAttribute = typeof specAttributes.$inferSelect
+export type Unit = typeof units.$inferSelect
+export type Space = typeof spaces.$inferSelect
+export type UnitRef = { id: string; name: string; symbol: string }
+
+export const DEFAULT_UNIT_SLUG = 'piece'
 
 const asSlugConflict = (error: unknown): never => {
   if (isUniqueViolation(error)) {
@@ -143,6 +154,13 @@ export const getTree = async (): Promise<CategoryNode[]> => {
   return roots
 }
 
+const attributeHasSpecs = async (id: string): Promise<boolean> => {
+  const [row] = await db.execute<{ used: boolean }>(
+    sql`select exists(select 1 from "product_specs" where "attribute_id" = ${id}) as "used"`,
+  )
+  return row?.used === true
+}
+
 export const createAttribute = async (
   input: CreateAttributeInput,
 ): Promise<SpecAttribute> => {
@@ -152,6 +170,7 @@ export const createAttribute = async (
       name: input.name,
       slug: input.slug,
       unit: input.unit ?? null,
+      type: input.type,
     })
     .returning()
     .catch(asAttributeConflict)
@@ -165,6 +184,18 @@ export const updateAttribute = async (
   id: string,
   patch: UpdateAttributeInput,
 ): Promise<SpecAttribute> => {
+  if (patch.type !== undefined) {
+    const [current] = await db
+      .select({ type: specAttributes.type })
+      .from(specAttributes)
+      .where(eq(specAttributes.id, id))
+      .limit(1)
+    if (!current) throw new AppError('NOT_FOUND')
+    if (current.type !== patch.type && (await attributeHasSpecs(id))) {
+      throw new AppError('ATTRIBUTE_TYPE_LOCKED')
+    }
+  }
+
   const [row] = await db
     .update(specAttributes)
     .set(patch)
@@ -196,3 +227,124 @@ export const removeAttribute = async (id: string): Promise<void> => {
 
 export const listAttributes = async (): Promise<SpecAttribute[]> =>
   db.select().from(specAttributes).orderBy(asc(specAttributes.name))
+
+export const listUnits = async (): Promise<Unit[]> =>
+  db.select().from(units).orderBy(asc(units.sortOrder), asc(units.name))
+
+export const getUnitBySlug = async (slug: string): Promise<Unit | null> => {
+  const [row] = await db
+    .select()
+    .from(units)
+    .where(eq(units.slug, slug))
+    .limit(1)
+
+  return row ?? null
+}
+
+export const createUnit = async (input: CreateUnitInput): Promise<Unit> => {
+  const [row] = await db
+    .insert(units)
+    .values({
+      name: input.name,
+      symbol: input.symbol,
+      slug: input.slug,
+      sortOrder: input.sortOrder ?? 0,
+    })
+    .returning()
+    .catch(asSlugConflict)
+
+  if (!row) throw new Error('create failed: insert returned no row')
+
+  return row
+}
+
+export const updateUnit = async (
+  id: string,
+  patch: UpdateUnitInput,
+): Promise<Unit> => {
+  const [row] = await db
+    .update(units)
+    .set(patch)
+    .where(eq(units.id, id))
+    .returning()
+    .catch(asSlugConflict)
+
+  if (!row) throw new AppError('NOT_FOUND')
+
+  return row
+}
+
+export const removeUnit = async (id: string): Promise<void> => {
+  const deleted = await db
+    .delete(units)
+    .where(eq(units.id, id))
+    .returning({ id: units.id })
+    .catch((error: unknown) => {
+      if (isReferenceViolation(error)) {
+        throw new AppError('UNIT_IN_USE')
+      }
+      throw error
+    })
+
+  if (deleted.length === 0) {
+    throw new AppError('NOT_FOUND')
+  }
+}
+
+export const listSpaces = async (): Promise<Space[]> =>
+  db.select().from(spaces).orderBy(asc(spaces.sortOrder), asc(spaces.name))
+
+export const getSpaceById = async (id: string): Promise<Space | null> => {
+  const [row] = await db.select().from(spaces).where(eq(spaces.id, id)).limit(1)
+
+  return row ?? null
+}
+
+export const createSpace = async (input: CreateSpaceInput): Promise<Space> => {
+  const [row] = await db
+    .insert(spaces)
+    .values({
+      name: input.name,
+      slug: input.slug,
+      sortOrder: input.sortOrder ?? 0,
+    })
+    .returning()
+    .catch(asSlugConflict)
+
+  if (!row) throw new Error('create failed: insert returned no row')
+
+  return row
+}
+
+export const updateSpace = async (
+  id: string,
+  patch: UpdateSpaceInput,
+): Promise<Space> => {
+  const [row] = await db
+    .update(spaces)
+    .set(patch)
+    .where(eq(spaces.id, id))
+    .returning()
+    .catch(asSlugConflict)
+
+  if (!row) throw new AppError('NOT_FOUND')
+
+  return row
+}
+
+export const removeSpace = async (id: string): Promise<void> => {
+  const deleted = await db
+    .delete(spaces)
+    .where(eq(spaces.id, id))
+    .returning({ id: spaces.id })
+    .catch((error: unknown) => {
+      if (isReferenceViolation(error)) {
+        throw new AppError('SPACE_IN_USE')
+      }
+      throw error
+    })
+
+  if (deleted.length === 0) {
+    throw new AppError('NOT_FOUND')
+  }
+}

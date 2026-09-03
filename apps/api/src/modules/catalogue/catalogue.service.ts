@@ -15,6 +15,14 @@ import {
   sql,
 } from 'drizzle-orm'
 
+import {
+  ATTRIBUTE_VALUE_TYPES,
+  type AttributeValueType,
+  type BoqOption,
+  specValueForType,
+  type TypedSpecValue,
+} from '@forge-kivu/types'
+
 import { db } from '../../db'
 import { isReferenceViolation, isUniqueViolation } from '../../db/errors'
 import { AppError } from '../../lib/errors'
@@ -27,9 +35,13 @@ import {
 } from '../suppliers/suppliers.service'
 import {
   type CategoryNode,
+  DEFAULT_UNIT_SLUG,
   getCategoryById,
   getTree,
+  getUnitBySlug,
   listAttributes,
+  listUnits,
+  type UnitRef,
 } from '../taxonomy/taxonomy.service'
 import type {
   AdminListQuery,
@@ -63,26 +75,27 @@ export type ProductRef = { id: string; name: string; slug: string }
 export type ProductOptionResponse = {
   id: string
   name: string
+  type: AttributeValueType
   sortOrder: number
-  values: { id: string; value: string; sortOrder: number }[]
+  values: { id: string; value: string; hex: string | null; sortOrder: number }[]
 }
 
 export type ProductVariantResponse = {
   id: string
   sku: string | null
   price: number | null
+  unit: UnitRef
   sortOrder: number
   imageMediaId: string | null
   imageUrl: string | null
   optionValueIds: string[]
 }
 
-export type ProductSpecResponse = {
-  attributeId: string
+export type ProductSpecResponse = TypedSpecValue & {
   name: string
   slug: string
   unit: string | null
-  value: string
+  type: AttributeValueType
 }
 
 export type ProductMediaResponse = {
@@ -168,6 +181,28 @@ const assertReadyMedia = async (mediaId: string): Promise<void> => {
   }
 }
 
+const toUnitRef = (row: UnitRef): UnitRef => ({
+  id: row.id,
+  name: row.name,
+  symbol: row.symbol,
+})
+
+const unitRefs = async (): Promise<Map<string, UnitRef>> =>
+  new Map((await listUnits()).map((row) => [row.id, toUnitRef(row)]))
+
+const requireUnit = (map: Map<string, UnitRef>, id: string): UnitRef => {
+  const ref = map.get(id)
+  if (!ref) throw new Error(`catalogue: no unit loaded for ${id}`)
+  return ref
+}
+
+const defaultUnitId = async (): Promise<string> => {
+  const unit = await getUnitBySlug(DEFAULT_UNIT_SLUG)
+  if (!unit)
+    throw new Error(`catalogue: default unit ${DEFAULT_UNIT_SLUG} missing`)
+  return unit.id
+}
+
 const mediaUrl = async (mediaId: string | null): Promise<string | null> => {
   if (!mediaId) return null
   const row = await getReady(mediaId)
@@ -239,9 +274,11 @@ const loadOptions = async (
     .select({
       id: productOptions.id,
       name: productOptions.name,
+      type: productOptions.type,
       sortOrder: productOptions.sortOrder,
       valueId: productOptionValues.id,
       value: productOptionValues.value,
+      hex: productOptionValues.hex,
       valueSortOrder: productOptionValues.sortOrder,
     })
     .from(productOptions)
@@ -257,6 +294,7 @@ const loadOptions = async (
     const option = options.get(row.id) ?? {
       id: row.id,
       name: row.name,
+      type: row.type,
       sortOrder: row.sortOrder,
       values: [],
     }
@@ -264,6 +302,7 @@ const loadOptions = async (
       option.values.push({
         id: row.valueId,
         value: row.value,
+        hex: row.hex,
         sortOrder: row.valueSortOrder,
       })
     }
@@ -284,15 +323,18 @@ const loadVariants = async (
 
   if (rows.length === 0) return []
 
-  const links = await db
-    .select()
-    .from(variantOptionValues)
-    .where(
-      inArray(
-        variantOptionValues.variantId,
-        rows.map((row) => row.id),
+  const [links, unitById] = await Promise.all([
+    db
+      .select()
+      .from(variantOptionValues)
+      .where(
+        inArray(
+          variantOptionValues.variantId,
+          rows.map((row) => row.id),
+        ),
       ),
-    )
+    unitRefs(),
+  ])
 
   const valuesByVariant = new Map<string, string[]>()
   for (const link of links) {
@@ -306,6 +348,7 @@ const loadVariants = async (
       id: row.id,
       sku: row.sku,
       price: row.price,
+      unit: requireUnit(unitById, row.unitId),
       sortOrder: row.sortOrder,
       imageMediaId: row.imageMediaId,
       imageUrl: await mediaUrl(row.imageMediaId),
@@ -335,7 +378,13 @@ const loadSpecs = async (productId: string): Promise<ProductSpecResponse[]> => {
         name: attribute.name,
         slug: attribute.slug,
         unit: attribute.unit,
+        type: attribute.type,
         value: row.value,
+        hex: row.hex,
+        valueNumber: row.valueNumber,
+        valueMin: row.valueMin,
+        valueMax: row.valueMax,
+        valueBool: row.valueBool,
       },
     ]
   })
@@ -468,7 +517,9 @@ export const createProduct = async (
 
     if (!row) throw new Error('createProduct failed: insert returned no row')
 
-    await tx.insert(productVariants).values({ productId: row.id })
+    await tx
+      .insert(productVariants)
+      .values({ productId: row.id, unitId: await defaultUnitId() })
 
     return row
   })
@@ -534,6 +585,15 @@ export const setOptions = async (
 ): Promise<ProductDetail> => {
   const product = await requireProduct(productId)
 
+  for (const option of input.options) {
+    const coloured = option.type === ATTRIBUTE_VALUE_TYPES.COLOR
+    for (const value of option.values) {
+      if (coloured ? value.hex === undefined : value.hex !== undefined) {
+        throw new AppError('OPTION_VALUE_INVALID')
+      }
+    }
+  }
+
   await db
     .transaction(async (tx) => {
       await tx
@@ -546,7 +606,12 @@ export const setOptions = async (
       for (const [index, option] of input.options.entries()) {
         const [row] = await tx
           .insert(productOptions)
-          .values({ productId, name: option.name, sortOrder: index })
+          .values({
+            productId,
+            name: option.name,
+            type: option.type,
+            sortOrder: index,
+          })
           .returning({ id: productOptions.id })
 
         if (!row) throw new Error('setOptions failed: insert returned no row')
@@ -554,13 +619,16 @@ export const setOptions = async (
         await tx.insert(productOptionValues).values(
           option.values.map((value, order) => ({
             optionId: row.id,
-            value,
+            value: value.value,
+            hex: value.hex ?? null,
             sortOrder: order,
           })),
         )
       }
 
-      await tx.insert(productVariants).values({ productId })
+      await tx
+        .insert(productVariants)
+        .values({ productId, unitId: await defaultUnitId() })
     })
     .catch(asVariantInUse)
 
@@ -605,6 +673,14 @@ export const setVariants = async (
     if (variant.imageMediaId) await assertReadyMedia(variant.imageMediaId)
   }
 
+  const unitById = await unitRefs()
+  const pieceId = await defaultUnitId()
+  for (const variant of input.variants) {
+    if (variant.unitId && !unitById.has(variant.unitId)) {
+      throw new AppError('UNIT_NOT_FOUND')
+    }
+  }
+
   await db
     .transaction(async (tx) => {
       await tx
@@ -619,6 +695,7 @@ export const setVariants = async (
             sku: variant.sku ?? null,
             price: variant.price ?? null,
             imageMediaId: variant.imageMediaId ?? null,
+            unitId: variant.unitId ?? pieceId,
             sortOrder: index,
           })
           .returning({ id: productVariants.id })
@@ -646,24 +723,24 @@ export const setSpecs = async (
 ): Promise<ProductDetail> => {
   const product = await requireProduct(productId)
 
-  const known = new Set((await listAttributes()).map((row) => row.id))
-  for (const spec of input.specs) {
-    if (!known.has(spec.attributeId)) {
-      throw new AppError('ATTRIBUTE_NOT_FOUND')
-    }
-  }
+  const known = new Map(
+    (await listAttributes()).map((row) => [row.id, row.type]),
+  )
+  const typed = input.specs.map((spec) => {
+    const type = known.get(spec.attributeId)
+    if (!type) throw new AppError('ATTRIBUTE_NOT_FOUND')
+    const parsed = specValueForType(type).safeParse(spec)
+    if (!parsed.success) throw new AppError('SPEC_VALUE_INVALID')
+    return parsed.data
+  })
 
   await db.transaction(async (tx) => {
     await tx.delete(productSpecs).where(eq(productSpecs.productId, productId))
 
-    if (input.specs.length > 0) {
-      await tx.insert(productSpecs).values(
-        input.specs.map((spec) => ({
-          productId,
-          attributeId: spec.attributeId,
-          value: spec.value,
-        })),
-      )
+    if (typed.length > 0) {
+      await tx
+        .insert(productSpecs)
+        .values(typed.map((spec) => ({ productId, ...spec })))
     }
   })
 
@@ -695,14 +772,19 @@ export const setMedia = async (
   return buildDetail(product)
 }
 
+export type VariantOption = BoqOption
+
 export type VariantRef = {
   id: string
   sku: string | null
   price: number | null
+  unit: UnitRef
   label: string | null
+  options: VariantOption[]
   product: { id: string; name: string; status: ProductStatus }
   supplier: ProductRef
   category: ProductRef
+  categoryRoot: ProductRef
   imageUrl: string | null
 }
 
@@ -710,6 +792,7 @@ export type VariantListItem = {
   variantId: string
   sku: string | null
   price: number | null
+  unit: UnitRef
   label: string | null
   product: { id: string; name: string; slug: string; status: ProductStatus }
   supplier: ProductRef
@@ -737,6 +820,7 @@ const variantSource = () =>
       id: productVariants.id,
       sku: productVariants.sku,
       price: productVariants.price,
+      unitId: productVariants.unitId,
       imageMediaId: productVariants.imageMediaId,
       coverMediaId,
       productId: products.id,
@@ -775,15 +859,14 @@ const variantImageUrl = (
   (row.coverMediaId ? urls.get(row.coverMediaId) : undefined) ??
   null
 
-const variantLabels = async (
-  variantIds: string[],
-): Promise<Map<string, string>> => {
-  if (variantIds.length === 0) return new Map()
-
-  const rows = await db
+const variantOptionRows = (variantIds: string[]) =>
+  db
     .select({
       variantId: variantOptionValues.variantId,
+      name: productOptions.name,
+      type: productOptions.type,
       value: productOptionValues.value,
+      hex: productOptionValues.hex,
     })
     .from(variantOptionValues)
     .innerJoin(
@@ -795,12 +878,39 @@ const variantLabels = async (
       eq(productOptions.id, productOptionValues.optionId),
     )
     .where(inArray(variantOptionValues.variantId, variantIds))
-    .orderBy(asc(productOptions.sortOrder))
+    .orderBy(asc(productOptions.sortOrder), asc(productOptionValues.sortOrder))
 
+const variantOptions = async (
+  variantIds: string[],
+): Promise<Map<string, VariantOption[]>> => {
+  if (variantIds.length === 0) return new Map()
+
+  const options = new Map<string, VariantOption[]>()
+  for (const row of await variantOptionRows(variantIds)) {
+    const current = options.get(row.variantId) ?? []
+    current.push({
+      name: row.name,
+      type: row.type,
+      value: row.value,
+      hex: row.hex,
+    })
+    options.set(row.variantId, current)
+  }
+  return options
+}
+
+const labelOf = (options: VariantOption[] | undefined): string | null =>
+  options && options.length > 0
+    ? options.map((option) => option.value).join(' / ')
+    : null
+
+const variantLabels = async (
+  variantIds: string[],
+): Promise<Map<string, string>> => {
   const labels = new Map<string, string>()
-  for (const row of rows) {
-    const current = labels.get(row.variantId)
-    labels.set(row.variantId, current ? `${current} / ${row.value}` : row.value)
+  for (const [variantId, options] of await variantOptions(variantIds)) {
+    const label = labelOf(options)
+    if (label !== null) labels.set(variantId, label)
   }
   return labels
 }
@@ -810,33 +920,42 @@ export const getVariantRefs = async (
 ): Promise<Map<string, VariantRef>> => {
   if (variantIds.length === 0) return new Map()
 
-  const [rows, labels, supplierById, categoryById] = await Promise.all([
+  const [rows, optionsById, supplierById, tree, unitById] = await Promise.all([
     variantSource().where(inArray(productVariants.id, variantIds)),
-    variantLabels(variantIds),
+    variantOptions(variantIds),
     supplierRefs(false),
-    getTree().then((tree) => collectCategories(tree, new Map())),
+    getTree(),
+    unitRefs(),
   ])
+  const categoryById = collectCategories(tree, new Map())
+  const rootById = rootByCategoryId(tree)
 
   const imageUrls = await variantImageUrls(rows)
 
   return new Map(
-    rows.map((row) => [
-      row.id,
-      {
-        id: row.id,
-        sku: row.sku,
-        price: row.price,
-        label: labels.get(row.id) ?? null,
-        product: {
-          id: row.productId,
-          name: row.productName,
-          status: row.productStatus,
+    rows.map((row) => {
+      const options = optionsById.get(row.id) ?? []
+      return [
+        row.id,
+        {
+          id: row.id,
+          sku: row.sku,
+          price: row.price,
+          unit: requireUnit(unitById, row.unitId),
+          label: labelOf(options),
+          options,
+          product: {
+            id: row.productId,
+            name: row.productName,
+            status: row.productStatus,
+          },
+          supplier: requireRef(supplierById, row.supplierId),
+          category: requireRef(categoryById, row.categoryId),
+          categoryRoot: requireRef(rootById, row.categoryId),
+          imageUrl: variantImageUrl(row, imageUrls),
         },
-        supplier: requireRef(supplierById, row.supplierId),
-        category: requireRef(categoryById, row.categoryId),
-        imageUrl: variantImageUrl(row, imageUrls),
-      },
-    ]),
+      ]
+    }),
   )
 }
 
@@ -1096,9 +1215,10 @@ export const listPublishedVariants = async (
       .offset((page - 1) * VARIANT_PAGE_SIZE),
   ])
 
-  const [labels, imageUrls] = await Promise.all([
+  const [labels, imageUrls, unitById] = await Promise.all([
     variantLabels(rows.map((row) => row.id)),
     variantImageUrls(rows),
+    unitRefs(),
   ])
 
   return {
@@ -1106,6 +1226,7 @@ export const listPublishedVariants = async (
       variantId: row.id,
       sku: row.sku,
       price: row.price,
+      unit: requireUnit(unitById, row.unitId),
       label: labels.get(row.id) ?? null,
       product: {
         id: row.productId,
@@ -1145,12 +1266,13 @@ export const getPublished = async (
   return row ? buildDetail(row) : null
 }
 
-export type FacetValue = { value: string; count: number }
+export type FacetValue = { value: string; hex: string | null; count: number }
 
 export type AttributeFacet = {
   slug: string
   name: string
   unit: string | null
+  type: AttributeValueType
   values: FacetValue[]
 }
 
@@ -1183,12 +1305,13 @@ const specFacetRows = (conditions: SQL[]) =>
     .select({
       attributeId: productSpecs.attributeId,
       value: productSpecs.value,
+      hex: productSpecs.hex,
       count: count(),
     })
     .from(productSpecs)
     .innerJoin(products, eq(products.id, productSpecs.productId))
     .where(and(...conditions))
-    .groupBy(productSpecs.attributeId, productSpecs.value)
+    .groupBy(productSpecs.attributeId, productSpecs.value, productSpecs.hex)
 
 export const getFacets = async (
   query: PublicListQuery,
@@ -1298,9 +1421,10 @@ export const getFacets = async (
       slug: attribute.slug,
       name: attribute.name,
       unit: attribute.unit,
+      type: attribute.type,
       values: [],
     }
-    facet.values.push({ value: row.value, count: row.count })
+    facet.values.push({ value: row.value, hex: row.hex, count: row.count })
     bySlug.set(attribute.slug, facet)
   }
 

@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import type { ProjectDetail, ProjectItem } from '@forge-kivu/api-client'
-import { PRODUCT_STATUSES } from '@forge-kivu/types'
+import {
+  calculateLineTotal,
+  PRODUCT_STATUSES,
+  sumAmounts,
+} from '@forge-kivu/types'
 
 const props = defineProps<{
   project: ProjectDetail

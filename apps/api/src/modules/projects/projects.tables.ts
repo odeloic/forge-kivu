@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm'
 import {
   date,
   integer,
@@ -7,6 +8,8 @@ import {
   primaryKey,
   text,
   timestamp,
+  unique,
+  uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core'
 
@@ -24,6 +27,7 @@ import {
 
 import { users } from '../auth/auth.tables'
 import { productVariants } from '../catalogue/catalogue.tables'
+import { spaces } from '../taxonomy/taxonomy.tables'
 
 export {
   PROJECT_PHASES,
@@ -64,18 +68,57 @@ export const projects = pgTable('projects', {
     .$onUpdate(() => new Date()),
 })
 
+export const PROJECT_SPACE_NAME_INDEX =
+  'project_spaces_project_id_name_lower_idx'
+
+export const projectSpaces = pgTable(
+  'project_spaces',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    spaceId: uuid('space_id').references(() => spaces.id, {
+      onDelete: 'restrict',
+    }),
+    name: text('name').notNull(),
+    sortOrder: integer('sort_order').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex(PROJECT_SPACE_NAME_INDEX).on(
+      table.projectId,
+      sql`lower(${table.name})`,
+    ),
+  ],
+)
+
 export const projectItems = pgTable(
   'project_items',
   {
+    id: uuid('id').primaryKey().defaultRandom(),
     projectId: uuid('project_id')
       .notNull()
       .references(() => projects.id, { onDelete: 'cascade' }),
     variantId: uuid('variant_id')
       .notNull()
       .references(() => productVariants.id, { onDelete: 'restrict' }),
-    quantity: integer('quantity').notNull(),
+    spaceId: uuid('space_id').references(() => projectSpaces.id, {
+      onDelete: 'set null',
+    }),
+    quantity: numeric('quantity', {
+      precision: 12,
+      scale: 2,
+      mode: 'number',
+    }).notNull(),
   },
-  (table) => [primaryKey({ columns: [table.projectId, table.variantId] })],
+  (table) => [
+    unique()
+      .on(table.projectId, table.variantId, table.spaceId)
+      .nullsNotDistinct(),
+  ],
 )
 
 export const projectPhases = pgTable(

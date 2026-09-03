@@ -11,6 +11,7 @@ import {
 } from '../../test/helpers'
 import { ROLES } from '@forge-kivu/types'
 import { categories, specAttributes } from './taxonomy.tables'
+import { SEEDED_UNIT_SLUGS } from '../../test/helpers'
 
 const ADMIN = {
   email: 'admin@example.com',
@@ -460,5 +461,318 @@ describe('spec attributes', () => {
     expect(removed.status).toBe(401)
     expect(unauthenticated.status).toBe(401)
     expect(await db.select().from(specAttributes)).toHaveLength(1)
+  })
+})
+
+const postUnit = (cookie: string, body: unknown) =>
+  app.request('/admin/units', jsonRequest(body, cookie))
+
+const patchUnit = (id: string, cookie: string, body: unknown) =>
+  app.request(`/admin/units/${id}`, writeRequest('PATCH', cookie, body))
+
+const deleteUnit = (id: string, cookie: string) =>
+  app.request(`/admin/units/${id}`, writeRequest('DELETE', cookie))
+
+const listUnits = () => app.request('/units')
+
+type UnitResponse = {
+  id: string
+  name: string
+  symbol: string
+  slug: string
+  sortOrder: number
+}
+
+describe('units', () => {
+  it('serves the seeded units in sort order to an anonymous caller', async () => {
+    const res = await listUnits()
+
+    expect(res.status).toBe(200)
+    const rows = (await res.json()) as UnitResponse[]
+    expect(rows.map((row) => row.slug)).toEqual([...SEEDED_UNIT_SLUGS])
+    expect(rows[0]).toMatchObject({ name: 'Piece', symbol: 'pc' })
+  })
+
+  it('creates, edits and lists an admin unit', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+
+    const created = await postUnit(admin, {
+      name: 'Pallet',
+      symbol: 'plt',
+      slug: 'pallet',
+      sortOrder: 99,
+    })
+    expect(created.status).toBe(201)
+    const unit = (await created.json()) as UnitResponse
+
+    const patched = await patchUnit(unit.id, admin, { symbol: 'pal' })
+    expect(patched.status).toBe(200)
+    expect((await patched.json()) as UnitResponse).toMatchObject({
+      name: 'Pallet',
+      symbol: 'pal',
+      slug: 'pallet',
+    })
+
+    const rows = (await (await listUnits()).json()) as UnitResponse[]
+    expect(rows.at(-1)).toMatchObject({ slug: 'pallet', sortOrder: 99 })
+  })
+
+  it('rejects a duplicate slug with 409', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+
+    const res = await postUnit(admin, {
+      name: 'Pieces',
+      symbol: 'pcs',
+      slug: 'piece',
+    })
+
+    expect(res.status).toBe(409)
+    expect(await res.json()).toMatchObject({ error: { code: 'SLUG_TAKEN' } })
+  })
+
+  it('refuses to delete a unit a variant references', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const unit = (await (
+      await postUnit(admin, { name: 'Pallet', symbol: 'plt', slug: 'pallet' })
+    ).json()) as UnitResponse
+    const supplier = await app.request(
+      '/admin/suppliers',
+      jsonRequest({ name: 'Kivu Tiles', slug: 'kivu-tiles' }, admin),
+    )
+    const { id: supplierId } = (await supplier.json()) as { id: string }
+    const categoryId = await createdCategoryId(admin, {
+      name: 'Tiles',
+      slug: 'tiles',
+    })
+    const product = await app.request(
+      '/admin/products',
+      jsonRequest(
+        { supplierId, categoryId, name: 'Tile', slug: 'tile' },
+        admin,
+      ),
+    )
+    const { id: productId } = (await product.json()) as { id: string }
+    const varied = await app.request(`/admin/products/${productId}/variants`, {
+      ...writeRequest('PATCH', admin),
+      method: 'PUT',
+      body: JSON.stringify({ variants: [{ sku: 'T-1', unitId: unit.id }] }),
+    })
+    expect(varied.status).toBe(200)
+
+    const blocked = await deleteUnit(unit.id, admin)
+    const freed = await app.request(`/admin/products/${productId}`, {
+      ...writeRequest('DELETE', admin),
+    })
+    const removed = await deleteUnit(unit.id, admin)
+
+    expect(blocked.status).toBe(409)
+    expect(await blocked.json()).toMatchObject({
+      error: { code: 'UNIT_IN_USE' },
+    })
+    expect(freed.status).toBe(204)
+    expect(removed.status).toBe(204)
+  })
+
+  it('rejects a workshop session and an anonymous request on writes', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const basic = await loginAs(BASIC)
+    const unit = (await (
+      await postUnit(admin, { name: 'Pallet', symbol: 'plt', slug: 'pallet' })
+    ).json()) as UnitResponse
+
+    const created = await postUnit(basic, {
+      name: 'Box',
+      symbol: 'bx',
+      slug: 'box',
+    })
+    const patched = await patchUnit(unit.id, basic, { name: 'Crate' })
+    const removed = await deleteUnit(unit.id, basic)
+    const unauthenticated = await postUnit('', {
+      name: 'Box',
+      symbol: 'bx',
+      slug: 'box',
+    })
+
+    expect(created.status).toBe(401)
+    expect(patched.status).toBe(401)
+    expect(removed.status).toBe(401)
+    expect(unauthenticated.status).toBe(401)
+  })
+})
+
+describe('typed spec attributes', () => {
+  it('defaults to text and round-trips a typed unit', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+
+    const plain = await postAttribute(admin, { name: 'Finish', slug: 'finish' })
+    const ranged = await postAttribute(admin, {
+      name: 'Span',
+      slug: 'span',
+      type: 'range',
+      unit: 'mm',
+    })
+    const rows = (await (await listAttributes()).json()) as {
+      slug: string
+      type: string
+      unit: string | null
+    }[]
+
+    expect(plain.status).toBe(201)
+    expect(ranged.status).toBe(201)
+    expect(rows.find((row) => row.slug === 'finish')).toMatchObject({
+      type: 'text',
+      unit: null,
+    })
+    expect(rows.find((row) => row.slug === 'span')).toMatchObject({
+      type: 'range',
+      unit: 'mm',
+    })
+  })
+
+  it('locks the type once a product spec uses the attribute', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const id = await createdAttributeId(admin, {
+      name: 'Weight',
+      slug: 'weight',
+      type: 'number',
+    })
+
+    const before = await patchAttribute(id, admin, { type: 'range' })
+    expect(before.status).toBe(200)
+
+    const supplier = await app.request(
+      '/admin/suppliers',
+      jsonRequest({ name: 'Kivu Tiles', slug: 'kivu-tiles' }, admin),
+    )
+    const { id: supplierId } = (await supplier.json()) as { id: string }
+    const categoryId = await createdCategoryId(admin, {
+      name: 'Tiles',
+      slug: 'tiles',
+    })
+    const product = await app.request(
+      '/admin/products',
+      jsonRequest(
+        { supplierId, categoryId, name: 'Tile', slug: 'tile' },
+        admin,
+      ),
+    )
+    const { id: productId } = (await product.json()) as { id: string }
+    const specced = await app.request(`/admin/products/${productId}/specs`, {
+      ...writeRequest('PATCH', admin),
+      method: 'PUT',
+      body: JSON.stringify({
+        specs: [{ attributeId: id, value: '1-2', valueMin: 1, valueMax: 2 }],
+      }),
+    })
+    expect(specced.status).toBe(200)
+
+    const locked = await patchAttribute(id, admin, { type: 'number' })
+    const renamed = await patchAttribute(id, admin, {
+      name: 'Mass',
+      type: 'range',
+    })
+
+    expect(locked.status).toBe(409)
+    expect(await locked.json()).toMatchObject({
+      error: { code: 'ATTRIBUTE_TYPE_LOCKED' },
+    })
+    expect(renamed.status).toBe(200)
+  })
+})
+
+const postSpace = (cookie: string, body: unknown) =>
+  app.request('/admin/spaces', jsonRequest(body, cookie))
+
+const patchSpace = (id: string, cookie: string, body: unknown) =>
+  app.request(`/admin/spaces/${id}`, writeRequest('PATCH', cookie, body))
+
+const deleteSpace = (id: string, cookie: string) =>
+  app.request(`/admin/spaces/${id}`, writeRequest('DELETE', cookie))
+
+const listSpaces = () => app.request('/spaces')
+
+type SpaceResponse = {
+  id: string
+  name: string
+  slug: string
+  sortOrder: number
+}
+
+describe('spaces', () => {
+  it('creates, edits and lists spaces in sort order for an anonymous caller', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+
+    const kitchen = await postSpace(admin, {
+      name: 'Kitchen',
+      slug: 'kitchen',
+      sortOrder: 2,
+    })
+    const bathroom = await postSpace(admin, {
+      name: 'Bathroom',
+      slug: 'bathroom',
+      sortOrder: 1,
+    })
+    expect(kitchen.status).toBe(201)
+    expect(bathroom.status).toBe(201)
+    const { id } = (await kitchen.json()) as SpaceResponse
+
+    const patched = await patchSpace(id, admin, { name: 'Kitchenette' })
+    const duplicate = await postSpace(admin, { name: 'Bath', slug: 'bathroom' })
+    const rows = (await (await listSpaces()).json()) as SpaceResponse[]
+
+    expect(patched.status).toBe(200)
+    expect(duplicate.status).toBe(409)
+    expect(rows.map((row) => row.name)).toEqual(['Bathroom', 'Kitchenette'])
+  })
+
+  it('refuses to delete a space a project space links to', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const basic = await loginAs(BASIC)
+    const created = await postSpace(admin, { name: 'Kitchen', slug: 'kitchen' })
+    const { id } = (await created.json()) as SpaceResponse
+    const project = await app.request(
+      '/projects',
+      jsonRequest({ name: 'House', projectType: 'residential_house' }, basic),
+    )
+    const { id: projectId } = (await project.json()) as { id: string }
+    const linked = await app.request(
+      `/projects/${projectId}/spaces`,
+      jsonRequest({ name: 'Main kitchen', spaceId: id }, basic),
+    )
+    expect(linked.status).toBe(201)
+
+    const blocked = await deleteSpace(id, admin)
+    const unlinked = await app.request(
+      `/projects/${projectId}/spaces/${((await linked.json()) as SpaceResponse).id}`,
+      writeRequest('DELETE', basic),
+    )
+    const removed = await deleteSpace(id, admin)
+    const missing = await deleteSpace(id, admin)
+
+    expect(blocked.status).toBe(409)
+    expect(await blocked.json()).toMatchObject({
+      error: { code: 'SPACE_IN_USE' },
+    })
+    expect(unlinked.status).toBe(204)
+    expect(removed.status).toBe(204)
+    expect(missing.status).toBe(404)
+  })
+
+  it('rejects a workshop session and an anonymous request on writes', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const basic = await loginAs(BASIC)
+    const { id } = (await (
+      await postSpace(admin, { name: 'Kitchen', slug: 'kitchen' })
+    ).json()) as SpaceResponse
+
+    const created = await postSpace(basic, { name: 'Hall', slug: 'hall' })
+    const patched = await patchSpace(id, basic, { name: 'Hall' })
+    const removed = await deleteSpace(id, basic)
+    const unauthenticated = await postSpace('', { name: 'Hall', slug: 'hall' })
+
+    expect(created.status).toBe(401)
+    expect(patched.status).toBe(401)
+    expect(removed.status).toBe(401)
+    expect(unauthenticated.status).toBe(401)
   })
 })

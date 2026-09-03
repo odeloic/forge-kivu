@@ -8,15 +8,21 @@ import { z } from 'zod'
 
 export {
   createProjectSchema,
+  createProjectSpaceSchema,
+  removeItemQuerySchema,
   setItemSchema,
   setPhaseSchema,
   updateProjectSchema,
+  updateProjectSpaceSchema,
   PROJECT_SORTS,
   type CreateProjectInput,
+  type CreateProjectSpaceInput,
   type ProjectSort,
+  type RemoveItemQuery,
   type SetItemInput,
   type SetPhaseInput,
   type UpdateProjectInput,
+  type UpdateProjectSpaceInput,
 } from '@forge-kivu/types'
 
 export const listQuerySchema = z.object({
@@ -35,6 +41,11 @@ export const projectPhaseParamSchema = z.object({
 export const projectItemParamSchema = z.object({
   id: z.uuid(),
   variantId: z.uuid(),
+})
+
+export const projectSpaceParamSchema = z.object({
+  id: z.uuid(),
+  spaceId: z.uuid(),
 })
 
 export type ListProjectsQuery = z.infer<typeof listQuerySchema>

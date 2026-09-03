@@ -1,6 +1,12 @@
 import { z } from 'zod'
 
 import { optionalField, optionalNumberField, slugSchema } from './fields'
+import {
+  ATTRIBUTE_VALUE_TYPES,
+  type AttributeValueType,
+  hexSchema,
+  OPTION_VALUE_TYPE_VALUES,
+} from './taxonomy'
 
 export const PRODUCT_STATUSES = {
   DRAFT: 'draft',
@@ -76,16 +82,26 @@ export const updateProductSchema = z
   .partial()
   .refine(atLeastOneField, { message: 'At least one field is required' })
 
+export const optionValueSchema = z.object({
+  value: catalogueFields.optionValue,
+  hex: hexSchema.optional(),
+})
+
 export const setOptionsSchema = z.object({
   options: z
     .array(
       z.object({
         name: catalogueFields.name,
+        type: z
+          .enum(OPTION_VALUE_TYPE_VALUES)
+          .default(ATTRIBUTE_VALUE_TYPES.TEXT),
         values: z
-          .array(catalogueFields.optionValue)
+          .array(optionValueSchema)
           .min(1, 'List at least one value.')
           .max(CATALOGUE_LIMITS.optionValues)
-          .refine(allDistinct, { message: 'Values must be distinct' }),
+          .refine((values) => allDistinct(values.map((row) => row.value)), {
+            message: 'Values must be distinct',
+          }),
       }),
     )
     .max(CATALOGUE_LIMITS.options)
@@ -101,6 +117,7 @@ export const setVariantsSchema = z.object({
         sku: catalogueFields.sku.nullish(),
         price: catalogueFields.price.nullish(),
         imageMediaId: z.uuid().nullish(),
+        unitId: z.uuid().optional(),
         optionValueIds: z
           .array(z.uuid())
           .max(CATALOGUE_LIMITS.variantOptions)
@@ -113,11 +130,90 @@ export const setVariantsSchema = z.object({
     .max(CATALOGUE_LIMITS.variants),
 })
 
+export const CATALOGUE_SPEC_NUMBER = {
+  max: 9999999999.9999,
+  step: 0.0001,
+} as const
+
+const specNumberSchema = z
+  .number()
+  .min(-CATALOGUE_SPEC_NUMBER.max)
+  .max(CATALOGUE_SPEC_NUMBER.max)
+  .multipleOf(CATALOGUE_SPEC_NUMBER.step, 'Use at most four decimals.')
+
+export const specValueSchema = z.object({
+  attributeId: z.uuid(),
+  value: catalogueFields.specValue,
+  hex: hexSchema.optional(),
+  valueNumber: specNumberSchema.optional(),
+  valueMin: specNumberSchema.optional(),
+  valueMax: specNumberSchema.optional(),
+  valueBool: z.boolean().optional(),
+})
+
+export type SpecValueInput = z.infer<typeof specValueSchema>
+
+export type TypedSpecValue = {
+  attributeId: string
+  value: string
+  hex: string | null
+  valueNumber: number | null
+  valueMin: number | null
+  valueMax: number | null
+  valueBool: boolean | null
+}
+
+type SpecTypedField =
+  'hex' | 'valueNumber' | 'valueMin' | 'valueMax' | 'valueBool'
+
+const SPEC_FIELDS_BY_TYPE: Record<AttributeValueType, SpecTypedField[]> = {
+  [ATTRIBUTE_VALUE_TYPES.TEXT]: [],
+  [ATTRIBUTE_VALUE_TYPES.NUMBER]: ['valueNumber'],
+  [ATTRIBUTE_VALUE_TYPES.BOOLEAN]: ['valueBool'],
+  [ATTRIBUTE_VALUE_TYPES.RANGE]: ['valueMin', 'valueMax'],
+  [ATTRIBUTE_VALUE_TYPES.COLOR]: ['hex'],
+}
+
+export const specValueForType = (type: AttributeValueType) =>
+  specValueSchema.transform((spec, ctx): TypedSpecValue => {
+    const required = SPEC_FIELDS_BY_TYPE[type]
+    for (const field of required) {
+      if (spec[field] === undefined) {
+        ctx.addIssue({
+          code: 'custom',
+          path: [field],
+          message: `A ${type} value needs ${field}.`,
+        })
+      }
+    }
+    if (
+      type === ATTRIBUTE_VALUE_TYPES.RANGE &&
+      spec.valueMin !== undefined &&
+      spec.valueMax !== undefined &&
+      spec.valueMin > spec.valueMax
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['valueMax'],
+        message: 'The maximum must not be below the minimum.',
+      })
+    }
+
+    const keep = new Set<SpecTypedField>(required)
+    return {
+      attributeId: spec.attributeId,
+      value: spec.value,
+      hex: keep.has('hex') ? (spec.hex ?? null) : null,
+      valueNumber: keep.has('valueNumber') ? (spec.valueNumber ?? null) : null,
+      valueMin: keep.has('valueMin') ? (spec.valueMin ?? null) : null,
+      valueMax: keep.has('valueMax') ? (spec.valueMax ?? null) : null,
+      valueBool: keep.has('valueBool') ? (spec.valueBool ?? null) : null,
+    }
+  })
+
 export const setSpecsSchema = z.object({
   specs: z
-    .array(
-      z.object({ attributeId: z.uuid(), value: catalogueFields.specValue }),
-    )
+    .array(specValueSchema)
     .max(CATALOGUE_LIMITS.specs)
     .refine((specs) => allDistinct(specs.map((spec) => spec.attributeId)), {
       message: 'Attributes must be distinct',
@@ -135,6 +231,7 @@ export const variantFormSchema = z.object({
   sku: optionalField(catalogueFields.sku),
   price: optionalNumberField(catalogueFields.price),
   imageMediaId: z.uuid().nullable(),
+  unitId: z.uuid('Choose a unit.'),
   optionValueIds: z.array(z.uuid()).max(CATALOGUE_LIMITS.variantOptions),
 })
 

@@ -6,24 +6,31 @@ import { auth } from '../../middleware/auth'
 import { boqSummaries } from '../boq/boq.service'
 import {
   createProjectSchema,
+  createProjectSpaceSchema,
   listQuerySchema,
   projectIdParamSchema,
   projectItemParamSchema,
   projectPhaseParamSchema,
+  projectSpaceParamSchema,
+  removeItemQuerySchema,
   setItemSchema,
   setPhaseSchema,
   updateProjectSchema,
+  updateProjectSpaceSchema,
 } from './projects.schemas'
 import {
   clearPhaseCompletion,
   create,
+  createSpace,
   getOwned,
   list,
   remove,
   removeItem,
+  removeSpace,
   setItem,
   setPhaseCompletion,
   update,
+  updateSpace,
 } from './projects.service'
 
 export const projectRoutes = new Hono()
@@ -71,21 +78,56 @@ export const projectRoutes = new Hono()
     async (c) => {
       const { id, variantId } = c.req.valid('param')
       return c.json(
-        await setItem(
-          id,
-          c.get('user').id,
-          variantId,
-          c.req.valid('json').quantity,
-        ),
+        await setItem(id, c.get('user').id, variantId, c.req.valid('json')),
       )
     },
   )
   .delete(
     '/:id/items/:variantId',
     zValidator('param', projectItemParamSchema),
+    zValidator('query', removeItemQuerySchema),
     async (c) => {
       const { id, variantId } = c.req.valid('param')
-      await removeItem(id, c.get('user').id, variantId)
+      await removeItem(
+        id,
+        c.get('user').id,
+        variantId,
+        c.req.valid('query').spaceId ?? null,
+      )
+      return c.body(null, 204)
+    },
+  )
+  .post(
+    '/:id/spaces',
+    zValidator('param', projectIdParamSchema),
+    zValidator('json', createProjectSpaceSchema),
+    async (c) =>
+      c.json(
+        await createSpace(
+          c.req.valid('param').id,
+          c.get('user').id,
+          c.req.valid('json'),
+        ),
+        201,
+      ),
+  )
+  .patch(
+    '/:id/spaces/:spaceId',
+    zValidator('param', projectSpaceParamSchema),
+    zValidator('json', updateProjectSpaceSchema),
+    async (c) => {
+      const { id, spaceId } = c.req.valid('param')
+      return c.json(
+        await updateSpace(id, c.get('user').id, spaceId, c.req.valid('json')),
+      )
+    },
+  )
+  .delete(
+    '/:id/spaces/:spaceId',
+    zValidator('param', projectSpaceParamSchema),
+    async (c) => {
+      const { id, spaceId } = c.req.valid('param')
+      await removeSpace(id, c.get('user').id, spaceId)
       return c.body(null, 204)
     },
   )

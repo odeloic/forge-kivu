@@ -96,7 +96,12 @@
     - name: Length
       values: [2.5 m, 3 m]
     - name: Colour
-      values: [Galvanized, Forest Green]
+      type: color
+      values:
+        - value: Galvanized
+          hex: '#a8adb3'
+        - value: Forest Green
+          hex: '#2e5e3a'
   variants:
     - sku: KBS-RFS-25-GAL
       price: 15000
@@ -249,7 +254,12 @@
     - name: Container Size
       values: [5 L, 20 L]
     - name: Colour
-      values: [Brilliant White, Soft Cream]
+      type: color
+      values:
+        - value: Brilliant White
+          hex: '#f7f7f2'
+        - value: Soft Cream
+          hex: '#f1e7c8'
   variants:
     - sku: KBS-PNT-WHT-05
       price: 32000
@@ -310,7 +320,14 @@
     warranty: '12'
   options:
     - name: Colour
-      values: [Charcoal, Sand Beige, Forest Green]
+      type: color
+      values:
+        - value: Charcoal
+          hex: '#36393c'
+        - value: Sand Beige
+          hex: '#d7c4a0'
+        - value: Forest Green
+          hex: '#2e5e3a'
   variants:
     - sku: KHI-SOF-IMZ-CHR
       price: 875000
@@ -404,7 +421,12 @@
     warranty: '12'
   options:
     - name: Colour
-      values: [Black, Grey]
+      type: color
+      values:
+        - value: Black
+          hex: '#161616'
+        - value: Grey
+          hex: '#8a8f94'
   variants:
     - sku: KHI-CHR-KGL-BLK
       price: 195000
@@ -616,7 +638,12 @@
     indoor-outdoor-use: Indoor and covered outdoor
   options:
     - name: Colour
-      values: [Grey Stone, Ivory Stone]
+      type: color
+      values:
+        - value: Grey Stone
+          hex: '#9a9a94'
+        - value: Ivory Stone
+          hex: '#e9e3d3'
   variants:
     - sku: KHI-TIL-STN-GRY
       price: 28500

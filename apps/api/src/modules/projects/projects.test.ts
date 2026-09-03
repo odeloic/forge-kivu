@@ -423,6 +423,31 @@ describe('manage project items', () => {
     expect(rows[0]?.quantity).toBe(5)
   })
 
+  it('accepts a fractional quantity and rejects zero and sub-cent values', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const { variantId } = await seededProduct(admin, 'cement-tile', true)
+    const owner = await loginAs(OWNER)
+    const id = await createProject(owner)
+
+    const fractional = await putItem(id, variantId, owner, { quantity: 12.5 })
+    const tooSmall = await putItem(id, variantId, owner, { quantity: 0.001 })
+    const zero = await putItem(id, variantId, owner, { quantity: 0 })
+
+    expect(fractional.status).toBe(200)
+    expect((await fractional.json()) as ProjectResponse).toMatchObject({
+      quantity: 12.5,
+      unit: { name: 'Piece', symbol: 'pc' },
+    })
+    expect(tooSmall.status).toBe(400)
+    expect(zero.status).toBe(400)
+
+    const rows = await db
+      .select()
+      .from(projectItems)
+      .where(eq(projectItems.projectId, id))
+    expect(rows[0]?.quantity).toBe(12.5)
+  })
+
   it('includes item variant and product data in the project detail', async () => {
     const admin = await loginAsAdmin(ADMIN)
     const { productId, variantId } = await seededProduct(
@@ -488,19 +513,6 @@ describe('manage project items', () => {
     )
 
     expect(res.status).toBe(404)
-  })
-
-  it('rejects a quantity below 1', async () => {
-    const admin = await loginAsAdmin(ADMIN)
-    const { variantId } = await seededProduct(admin, 'cement-tile', true)
-    const owner = await loginAs(OWNER)
-    const id = await createProject(owner)
-
-    const zero = await putItem(id, variantId, owner, { quantity: 0 })
-    const fraction = await putItem(id, variantId, owner, { quantity: 1.5 })
-
-    expect(zero.status).toBe(400)
-    expect(fraction.status).toBe(400)
   })
 
   it('hides another user project behind a 404', async () => {
@@ -1157,5 +1169,229 @@ describe('batch item reader for other modules', () => {
       true,
     )
     expect(five.queries).toBe(one.queries)
+  })
+})
+
+describe('project spaces', () => {
+  const postSpace = (id: string, cookie: string, body: unknown) =>
+    app.request(`/projects/${id}/spaces`, jsonRequest(body, cookie))
+
+  const patchSpace = (
+    id: string,
+    spaceId: string,
+    cookie: string,
+    body: unknown,
+  ) =>
+    app.request(
+      `/projects/${id}/spaces/${spaceId}`,
+      write('PATCH', cookie, body),
+    )
+
+  const deleteSpace = (id: string, spaceId: string, cookie: string) =>
+    app.request(`/projects/${id}/spaces/${spaceId}`, write('DELETE', cookie))
+
+  const canonicalSpace = async (admin: string, slug: string): Promise<string> =>
+    createdId(
+      await app.request(
+        '/admin/spaces',
+        jsonRequest({ name: `Space ${slug}`, slug }, admin),
+      ),
+      'space create',
+    )
+
+  type SpaceResponse = {
+    id: string
+    projectId: string
+    spaceId: string | null
+    name: string
+    sortOrder: number
+  }
+
+  type ItemResponse = {
+    id: string
+    variantId: string
+    quantity: number
+    space: { id: string; name: string } | null
+  }
+
+  it('creates a named space linked to a canonical one and refuses a case-insensitive duplicate', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const bathroom = await canonicalSpace(admin, 'bathroom')
+    const owner = await loginAs(OWNER)
+    const other = await loginAs(OTHER)
+    const id = await createProject(owner)
+
+    const created = await postSpace(id, owner, {
+      name: 'Master bathroom',
+      spaceId: bathroom,
+    })
+    const duplicate = await postSpace(id, owner, { name: 'master BATHROOM' })
+    const foreign = await postSpace(id, other, { name: 'Guest bathroom' })
+    const unknownCanonical = await postSpace(id, owner, {
+      name: 'Kitchen',
+      spaceId: '00000000-0000-4000-8000-000000000000',
+    })
+
+    expect(created.status).toBe(201)
+    expect((await created.json()) as SpaceResponse).toMatchObject({
+      projectId: id,
+      spaceId: bathroom,
+      name: 'Master bathroom',
+      sortOrder: 0,
+    })
+    expect(duplicate.status).toBe(409)
+    expect(await duplicate.json()).toMatchObject({
+      error: { code: 'PROJECT_SPACE_DUPLICATE' },
+    })
+    expect(foreign.status).toBe(404)
+    expect(unknownCanonical.status).toBe(404)
+
+    const detail = await jsonOf<{ spaces: SpaceResponse[] }>(
+      await getProject(id, owner),
+    )
+    expect(detail.spaces.map((space) => space.name)).toEqual([
+      'Master bathroom',
+    ])
+  })
+
+  it('renames a space, unlinks its canonical space and hides other owners', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const bathroom = await canonicalSpace(admin, 'bathroom')
+    const owner = await loginAs(OWNER)
+    const other = await loginAs(OTHER)
+    const id = await createProject(owner)
+    const spaceId = await createdId(
+      await postSpace(id, owner, { name: 'Bath', spaceId: bathroom }),
+      'space create',
+    )
+
+    const renamed = await patchSpace(id, spaceId, owner, {
+      name: 'Ensuite',
+      spaceId: null,
+    })
+    const foreign = await patchSpace(id, spaceId, other, { name: 'Hijacked' })
+
+    expect(renamed.status).toBe(200)
+    expect((await renamed.json()) as SpaceResponse).toMatchObject({
+      name: 'Ensuite',
+      spaceId: null,
+    })
+    expect(foreign.status).toBe(404)
+  })
+
+  it('keeps one row per variant and space, updating in place', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const { variantId } = await seededProduct(admin, 'cement-tile', true)
+    const owner = await loginAs(OWNER)
+    const id = await createProject(owner)
+    const spaceId = await createdId(
+      await postSpace(id, owner, { name: 'Kitchen' }),
+      'space create',
+    )
+
+    const unassigned = await putItem(id, variantId, owner, { quantity: 2 })
+    const assigned = await putItem(id, variantId, owner, {
+      quantity: 3,
+      spaceId,
+    })
+    const updatedUnassigned = await putItem(id, variantId, owner, {
+      quantity: 4,
+    })
+    const updatedAssigned = await putItem(id, variantId, owner, {
+      quantity: 5,
+      spaceId,
+    })
+
+    expect(unassigned.status).toBe(200)
+    expect(assigned.status).toBe(200)
+    expect(updatedUnassigned.status).toBe(200)
+    expect(updatedAssigned.status).toBe(200)
+    expect((await assigned.json()) as ItemResponse).toMatchObject({
+      quantity: 3,
+      space: { id: spaceId, name: 'Kitchen' },
+    })
+
+    const detail = await jsonOf<{ items: ItemResponse[] }>(
+      await getProject(id, owner),
+    )
+    expect(detail.items).toHaveLength(2)
+    expect(
+      detail.items.map((item) => [item.space?.id ?? null, item.quantity]),
+    ).toEqual(
+      expect.arrayContaining([
+        [null, 4],
+        [spaceId, 5],
+      ]),
+    )
+    expect(detail.items.every((item) => typeof item.id === 'string')).toBe(true)
+  })
+
+  it('rejects a space that belongs to another project', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const { variantId } = await seededProduct(admin, 'cement-tile', true)
+    const owner = await loginAs(OWNER)
+    const mine = await createProject(owner)
+    const theirs = await createProject(owner, { name: 'Other' })
+    const spaceId = await createdId(
+      await postSpace(theirs, owner, { name: 'Kitchen' }),
+      'space create',
+    )
+
+    const res = await putItem(mine, variantId, owner, { quantity: 1, spaceId })
+
+    expect(res.status).toBe(404)
+  })
+
+  it('unassigns items when their space is deleted', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const { variantId } = await seededProduct(admin, 'cement-tile', true)
+    const owner = await loginAs(OWNER)
+    const id = await createProject(owner)
+    const spaceId = await createdId(
+      await postSpace(id, owner, { name: 'Kitchen' }),
+      'space create',
+    )
+    await putItem(id, variantId, owner, { quantity: 3, spaceId })
+
+    const removed = await deleteSpace(id, spaceId, owner)
+    const detail = await jsonOf<{ items: ItemResponse[]; spaces: unknown[] }>(
+      await getProject(id, owner),
+    )
+
+    expect(removed.status).toBe(204)
+    expect(detail.spaces).toEqual([])
+    expect(detail.items).toMatchObject([
+      { variantId, quantity: 3, space: null },
+    ])
+  })
+
+  it('removes only the addressed row on delete', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const { variantId } = await seededProduct(admin, 'cement-tile', true)
+    const owner = await loginAs(OWNER)
+    const id = await createProject(owner)
+    const spaceId = await createdId(
+      await postSpace(id, owner, { name: 'Kitchen' }),
+      'space create',
+    )
+    await putItem(id, variantId, owner, { quantity: 2 })
+    await putItem(id, variantId, owner, { quantity: 3, spaceId })
+
+    const unassigned = await deleteItem(id, variantId, owner)
+    const afterFirst = await jsonOf<{ items: ItemResponse[] }>(
+      await getProject(id, owner),
+    )
+    const assigned = await app.request(
+      `/projects/${id}/items/${variantId}?spaceId=${spaceId}`,
+      write('DELETE', owner),
+    )
+    const afterSecond = await jsonOf<{ items: ItemResponse[] }>(
+      await getProject(id, owner),
+    )
+
+    expect(unassigned.status).toBe(204)
+    expect(afterFirst.items).toMatchObject([{ space: { id: spaceId } }])
+    expect(assigned.status).toBe(204)
+    expect(afterSecond.items).toEqual([])
   })
 })
