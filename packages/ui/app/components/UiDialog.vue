@@ -61,4 +61,20 @@ defineProps<{ title: string; description?: string }>()
 .description {
   font-size: var(--text-xs);
 }
+
+@media (max-width: 56.25rem) {
+  .panel {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    gap: var(--space-8);
+    width: 100%;
+    max-height: 90dvh;
+    overflow-y: auto;
+    padding: var(--space-9) var(--space-8) var(--space-10);
+    border-inline: 0;
+    border-block-end: 0;
+    transform: none;
+  }
+}
 </style>

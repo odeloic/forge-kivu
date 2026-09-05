@@ -1,6 +1,7 @@
 import {
   errorCodes,
   errorResponseSchema,
+  PROJECT_LIMITS,
   type ErrorCode,
 } from '@forge-kivu/types'
 
@@ -32,7 +33,7 @@ const messages: Record<ErrorCode, string> = {
   UNIT_NOT_FOUND: 'The selected unit does not exist.',
   OPTION_VALUE_INVALID: 'An option value does not match its option type.',
   SPEC_VALUE_INVALID: 'A spec value does not match its attribute type.',
-  PROJECT_SPACE_LIMIT: 'This project has reached its space limit.',
+  PROJECT_SPACE_LIMIT: `${PROJECT_LIMITS.spaces} spaces is the limit for a project. Rename or remove one first.`,
   GALLERY_ORDER_MISMATCH: 'The gallery order does not match the current items.',
   BOQ_NOT_GENERATABLE: 'This bill of quantities cannot be generated yet.',
   EMAIL_TAKEN: 'Email already registered.',
@@ -44,7 +45,8 @@ const messages: Record<ErrorCode, string> = {
   VARIANT_IN_USE: 'This variant is still in use.',
   UNIT_IN_USE: 'This unit is still in use.',
   SPACE_IN_USE: 'This space is still in use.',
-  PROJECT_SPACE_DUPLICATE: 'This project already has a space with that name.',
+  PROJECT_SPACE_DUPLICATE:
+    'That name is already a space in this project. Pick it from the list instead.',
   ATTRIBUTE_TYPE_LOCKED:
     'The type cannot change while products use this attribute.',
   MEDIA_IN_USE: 'This media is still in use.',

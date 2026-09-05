@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { ProjectItem } from '@forge-kivu/api-client'
+
 definePageMeta({ access: 'authenticated', layout: 'workshop' })
 
 const route = useRoute()
@@ -18,15 +20,10 @@ const { data, error } = await useAsyncData(
 
 if (error.value) throw error.value
 
-const toLine = (item: {
-  variantId: string
-  product: { name: string }
-  sku: string | null
-  label: string | null
-  price: number | null
-  quantity: number
-}): ProjectLine => ({
+const toLine = (item: ProjectItem): ProjectLine => ({
   variantId: item.variantId,
+  spaceId: item.space?.id ?? null,
+  spaceName: item.space?.name ?? null,
   name: item.product.name,
   sku: item.sku,
   label: item.label,
@@ -44,17 +41,13 @@ const { pending: saving, error: actionError, run } = useAsyncAction()
 
 const save = () =>
   run(async () => {
-    const kept = new Set(lines.value.map((line) => line.variantId))
-    for (const line of savedLines.value) {
-      if (!kept.has(line.variantId)) await removeItem(id.value, line.variantId)
-    }
+    const { removed, upserts } = diffLines(savedLines.value, lines.value)
 
-    const previous = new Map(
-      savedLines.value.map((line) => [line.variantId, line.quantity]),
-    )
-    for (const line of lines.value) {
-      if (previous.get(line.variantId) === line.quantity) continue
-      await setItem(id.value, line.variantId, line.quantity)
+    for (const line of removed) {
+      await removeItem(id.value, line.variantId, line.spaceId ?? undefined)
+    }
+    for (const line of upserts) {
+      await setItem(id.value, line.variantId, line.quantity, line.spaceId)
     }
 
     await navigateTo(back.value)
@@ -91,7 +84,11 @@ const save = () =>
       {{ errorMessage(actionError) }}
     </p>
 
-    <ProjectProductPicker v-model="lines" :currency="currency" />
+    <ProjectProductPicker
+      v-model="lines"
+      :spaces="data.spaces"
+      :currency="currency"
+    />
   </section>
 </template>
 

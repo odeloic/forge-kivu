@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import type { VariantListItem } from '@forge-kivu/api-client'
+import type { ProjectSpace, VariantListItem } from '@forge-kivu/api-client'
 import { PROJECT_LIMITS } from '@forge-kivu/types'
 
 const lines = defineModel<ProjectLine[]>({ required: true })
 
-const props = defineProps<{ currency: string }>()
+const props = defineProps<{ currency: string; spaces: ProjectSpace[] }>()
 
 const SEARCH_DELAY = 250
 
@@ -15,6 +15,7 @@ const search = ref('')
 const term = ref('')
 const category = ref('')
 const page = ref(1)
+const target = ref('')
 
 let timer: ReturnType<typeof setTimeout> | undefined
 
@@ -49,9 +50,34 @@ const { data: variants, error } = await useAsyncData(
   { watch: [term, category, page] },
 )
 
-const selected = computed(
-  () => new Set(lines.value.map((line) => line.variantId)),
-)
+const spaceNameOf = (spaceId: string | null): string | null =>
+  props.spaces.find((space) => space.id === spaceId)?.name ?? null
+
+const targetSpaceId = computed(() => target.value || null)
+
+const selected = computed(() => new Set(lines.value.map(lineKey)))
+
+const isAdded = (variant: VariantListItem): boolean =>
+  selected.value.has(
+    lineKey({
+      variantId: variant.variantId,
+      spaceId: targetSpaceId.value,
+    }),
+  )
+
+const heldSpaces = computed(() => {
+  const byVariant = new Map<string, Set<string>>()
+  for (const line of lines.value) {
+    const held = byVariant.get(line.variantId) ?? new Set<string>()
+    held.add(line.spaceId ?? '')
+    byVariant.set(line.variantId, held)
+  }
+  return byVariant
+})
+
+const isTaken = (line: ProjectLine, spaceId: string | null): boolean =>
+  (line.spaceId ?? '') !== (spaceId ?? '') &&
+  Boolean(heldSpaces.value.get(line.variantId)?.has(spaceId ?? ''))
 
 const lastPage = computed(() => {
   const pageSize = variants.value?.pageSize ?? 0
@@ -62,11 +88,13 @@ const lastPage = computed(() => {
 const total = computed(() => linesTotal(lines.value))
 
 const add = (variant: VariantListItem) => {
-  if (selected.value.has(variant.variantId)) return
+  if (isAdded(variant)) return
   lines.value = [
     ...lines.value,
     {
       variantId: variant.variantId,
+      spaceId: targetSpaceId.value,
+      spaceName: spaceNameOf(targetSpaceId.value),
       name: variant.product.name,
       sku: variant.sku,
       label: variant.label,
@@ -76,31 +104,50 @@ const add = (variant: VariantListItem) => {
   ]
 }
 
-const remove = (variantId: string) => {
-  lines.value = lines.value.filter((line) => line.variantId !== variantId)
-  delete drafts[variantId]
+const remove = (line: ProjectLine) => {
+  const key = lineKey(line)
+  lines.value = lines.value.filter((entry) => lineKey(entry) !== key)
+  delete drafts[key]
 }
 
 const drafts = reactive<Record<string, string>>({})
 
 const quantityOf = (line: ProjectLine): string =>
-  drafts[line.variantId] ?? String(line.quantity)
+  drafts[lineKey(line)] ?? String(line.quantity)
 
-const setQuantity = (variantId: string, value: string) => {
-  drafts[variantId] = value
+const setQuantity = (line: ProjectLine, value: string) => {
+  const key = lineKey(line)
+  drafts[key] = value
 
   const quantity = Number(value)
   if (!Number.isFinite(quantity)) return
   if (quantity < 0.01 || quantity > PROJECT_LIMITS.quantity) return
   if (Math.round(quantity * 100) !== quantity * 100) return
 
-  lines.value = lines.value.map((line) =>
-    line.variantId === variantId ? { ...line, quantity } : line,
+  lines.value = lines.value.map((entry) =>
+    lineKey(entry) === key ? { ...entry, quantity } : entry,
   )
 }
 
-const settleQuantity = (variantId: string) => {
-  delete drafts[variantId]
+const settleQuantity = (line: ProjectLine) => {
+  delete drafts[lineKey(line)]
+}
+
+const setSpace = (line: ProjectLine, value: string) => {
+  const spaceId = value || null
+  const from = lineKey(line)
+  const to = lineKey({ variantId: line.variantId, spaceId })
+  if (from === to) return
+
+  lines.value = lines.value.map((entry) =>
+    lineKey(entry) === from
+      ? { ...entry, spaceId, spaceName: spaceNameOf(spaceId) }
+      : entry,
+  )
+
+  const draft = drafts[from]
+  delete drafts[from]
+  if (draft !== undefined) drafts[to] = draft
 }
 
 const variantName = (variant: VariantListItem) =>
@@ -133,6 +180,15 @@ const lineCaption = (line: ProjectLine) =>
             <option value="">All categories</option>
             <option v-for="row in categoryRows" :key="row.id" :value="row.slug">
               {{ '— '.repeat(row.depth) }}{{ row.name }}
+            </option>
+          </select>
+        </div>
+        <div class="field target">
+          <Label for="pick-target">Add to space</Label>
+          <select id="pick-target" v-model="target">
+            <option value="">— no space</option>
+            <option v-for="space in spaces" :key="space.id" :value="space.id">
+              {{ space.name }}
             </option>
           </select>
         </div>
@@ -180,10 +236,10 @@ const lineCaption = (line: ProjectLine) =>
               <div class="actions">
                 <UiButton
                   variant="ghost"
-                  :disabled="selected.has(variant.variantId)"
+                  :disabled="isAdded(variant)"
                   @click="add(variant)"
                 >
-                  {{ selected.has(variant.variantId) ? 'Added' : 'Add' }}
+                  {{ isAdded(variant) ? 'Added' : 'Add' }}
                 </UiButton>
               </div>
             </td>
@@ -209,18 +265,41 @@ const lineCaption = (line: ProjectLine) =>
         <thead>
           <tr>
             <th>Variant</th>
+            <th class="space-column">Space</th>
             <th class="qty-column">Qty</th>
             <th class="line-column">Line</th>
             <th class="remove-column" />
           </tr>
         </thead>
         <tbody>
-          <tr v-for="line in lines" :key="line.variantId">
+          <tr v-for="line in lines" :key="lineKey(line)">
             <td>
               <div class="named">
                 <span class="ellip">{{ line.name }}</span>
                 <code class="ellip">{{ lineCaption(line) }}</code>
               </div>
+            </td>
+            <td>
+              <select
+                class="space"
+                :aria-label="`Space for ${line.name}`"
+                :value="line.spaceId ?? ''"
+                @change="
+                  setSpace(line, ($event.target as HTMLSelectElement).value)
+                "
+              >
+                <option value="" :disabled="isTaken(line, null)">
+                  — no space
+                </option>
+                <option
+                  v-for="space in spaces"
+                  :key="space.id"
+                  :value="space.id"
+                  :disabled="isTaken(line, space.id)"
+                >
+                  {{ space.name }}
+                </option>
+              </select>
             </td>
             <td>
               <input
@@ -232,12 +311,9 @@ const lineCaption = (line: ProjectLine) =>
                 :aria-label="`Quantity for ${line.name}`"
                 :value="quantityOf(line)"
                 @input="
-                  setQuantity(
-                    line.variantId,
-                    ($event.target as HTMLInputElement).value,
-                  )
+                  setQuantity(line, ($event.target as HTMLInputElement).value)
                 "
-                @blur="settleQuantity(line.variantId)"
+                @blur="settleQuantity(line)"
               />
             </td>
             <td v-if="line.price === null" class="muted unpriced">—</td>
@@ -247,7 +323,7 @@ const lineCaption = (line: ProjectLine) =>
                 <UiButton
                   variant="ghost"
                   :aria-label="`Remove ${line.name}`"
-                  @click="remove(line.variantId)"
+                  @click="remove(line)"
                 >
                   ×
                 </UiButton>
@@ -272,7 +348,7 @@ const lineCaption = (line: ProjectLine) =>
 <style scoped>
 .picker {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 30rem);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 34rem);
   gap: var(--space-11);
   align-items: start;
 }
@@ -304,6 +380,10 @@ const lineCaption = (line: ProjectLine) =>
   inline-size: 11rem;
 }
 
+.field.target {
+  inline-size: 10rem;
+}
+
 .image-column {
   inline-size: 3.5rem;
 }
@@ -319,6 +399,10 @@ const lineCaption = (line: ProjectLine) =>
 
 .add-column {
   inline-size: 5rem;
+}
+
+.space-column {
+  inline-size: 9.5rem;
 }
 
 .qty-column {
@@ -373,6 +457,11 @@ const lineCaption = (line: ProjectLine) =>
 .unpriced {
   font-size: var(--text-2xs);
   text-align: end;
+}
+
+.space {
+  inline-size: 100%;
+  font-size: var(--text-xs);
 }
 
 .qty {

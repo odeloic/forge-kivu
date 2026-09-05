@@ -85,10 +85,7 @@ describe('splitAttributes', () => {
 
   it('keeps a filtered attribute surfaced even when its values are unique', () => {
     const { surfaced, rest } = splitAttributes(
-      [
-        attribute('finish', [['Matt', 1]]),
-        attribute('warranty', [['12', 4]]),
-      ],
+      [attribute('finish', [['Matt', 1]]), attribute('warranty', [['12', 4]])],
       ['finish'],
     )
 
@@ -98,10 +95,7 @@ describe('splitAttributes', () => {
 
   it('preserves the endpoint ordering within each group', () => {
     const { surfaced } = splitAttributes(
-      [
-        attribute('alpha', [['x', 2]]),
-        attribute('beta', [['y', 5]]),
-      ],
+      [attribute('alpha', [['x', 2]]), attribute('beta', [['y', 5]])],
       [],
     )
 

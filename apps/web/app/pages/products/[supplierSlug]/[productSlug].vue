@@ -4,6 +4,7 @@ import type { ProductOption, ProductVariant } from '@forge-kivu/api-client'
 definePageMeta({ access: 'public' })
 
 const route = useRoute()
+const router = useRouter()
 const api = useApi()
 
 const params = computed(() => ({
@@ -25,15 +26,50 @@ const { data: product, error } = await useAsyncData(
 
 if (error.value) throw error.value
 
-const { options, variants, variant, price, imageUrl, isSelected, select } =
-  useProductVariant(product)
+const {
+  options,
+  variants,
+  variant,
+  price,
+  imageUrl,
+  isSelected,
+  select,
+  selectVariant,
+} = useProductVariant(product)
 
-const valueOf = (
-  row: ProductVariant,
-  option: ProductOption,
-): string | null =>
-  option.values.find((value) => row.optionValueIds.includes(value.id))
-    ?.value ?? null
+const panelOpen = ref(false)
+const askVariant = ref(false)
+
+const target = computed<AddToProjectTarget | null>(() =>
+  product.value
+    ? {
+        product: product.value,
+        variant: askVariant.value ? undefined : variant.value,
+      }
+    : null,
+)
+
+const openPanel = () => {
+  askVariant.value = false
+  panelOpen.value = true
+}
+
+onMounted(() => {
+  const add = route.query.add
+  if (typeof add !== 'string') return
+
+  if (add) selectVariant(add)
+  askVariant.value = add === ''
+  panelOpen.value = true
+
+  const query = { ...route.query }
+  delete query.add
+  void router.replace({ query })
+})
+
+const valueOf = (row: ProductVariant, option: ProductOption): string | null =>
+  option.values.find((value) => row.optionValueIds.includes(value.id))?.value ??
+  null
 
 const selectedValue = (option: ProductOption): string =>
   option.values.find((value) => isSelected(option.id, value.id))?.id ?? ''
@@ -133,7 +169,7 @@ const specTitle = (spec: { name: string; unit: string | null }): string =>
         </p>
 
         <div class="actions">
-          <UiButton variant="primary" :disabled="!variant">
+          <UiButton variant="primary" :disabled="!variant" @click="openPanel">
             Add to project
           </UiButton>
           <UiButton as-child>
@@ -144,53 +180,55 @@ const specTitle = (spec: { name: string; unit: string | null }): string =>
     </div>
 
     <div class="panels">
-    <section v-if="product.specs.length" class="panel">
-      <h2>Specification</h2>
-      <table>
-        <thead>
-          <tr>
-            <th class="attribute-column">Attribute</th>
-            <th>Value</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="spec in product.specs" :key="spec.attributeId">
-            <td class="muted">{{ specTitle(spec) }}</td>
-            <td>{{ spec.value }}</td>
-          </tr>
-        </tbody>
-      </table>
-    </section>
+      <section v-if="product.specs.length" class="panel">
+        <h2>Specification</h2>
+        <table>
+          <thead>
+            <tr>
+              <th class="attribute-column">Attribute</th>
+              <th>Value</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="spec in product.specs" :key="spec.attributeId">
+              <td class="muted">{{ specTitle(spec) }}</td>
+              <td>{{ spec.value }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
 
-    <section v-if="options.length" class="panel">
-      <h2>Variants</h2>
-      <table>
-        <thead>
-          <tr>
-            <th class="sku-column">SKU</th>
-            <th v-for="option in options" :key="option.id">
-              {{ option.name }}
-            </th>
-            <th class="price-column">Price</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="row in variants" :key="row.id">
-            <td>
-              <code v-if="row.sku">{{ row.sku }}</code>
-              <span v-else class="muted">—</span>
-            </td>
-            <td v-for="option in options" :key="option.id">
-              {{ valueOf(row, option) ?? '—' }}
-            </td>
-            <td class="numeric">
-              {{ row.price === null ? '—' : formatRwf(row.price) }}
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </section>
+      <section v-if="options.length" class="panel">
+        <h2>Variants</h2>
+        <table>
+          <thead>
+            <tr>
+              <th class="sku-column">SKU</th>
+              <th v-for="option in options" :key="option.id">
+                {{ option.name }}
+              </th>
+              <th class="price-column">Price</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in variants" :key="row.id">
+              <td>
+                <code v-if="row.sku">{{ row.sku }}</code>
+                <span v-else class="muted">—</span>
+              </td>
+              <td v-for="option in options" :key="option.id">
+                {{ valueOf(row, option) ?? '—' }}
+              </td>
+              <td class="numeric">
+                {{ row.price === null ? '—' : formatRwf(row.price) }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
     </div>
+
+    <AddToProjectDialog v-model:open="panelOpen" :target="target" />
   </article>
 </template>
 

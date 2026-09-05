@@ -1,0 +1,56 @@
+- name: Kitchen
+  slug: kitchen
+
+- name: Living room
+  slug: living-room
+
+- name: Dining room
+  slug: dining-room
+
+- name: Bedroom
+  slug: bedroom
+
+- name: Bathroom
+  slug: bathroom
+
+- name: Toilet
+  slug: toilet
+
+- name: Corridor
+  slug: corridor
+
+- name: Staircase
+  slug: staircase
+
+- name: Garage
+  slug: garage
+
+- name: Store
+  slug: store
+
+- name: Laundry
+  slug: laundry
+
+- name: Office
+  slug: office
+
+- name: Reception
+  slug: reception
+
+- name: Balcony
+  slug: balcony
+
+- name: Terrace
+  slug: terrace
+
+- name: Roof
+  slug: roof
+
+- name: Exterior
+  slug: exterior
+
+- name: Garden
+  slug: garden
+
+- name: Boundary wall
+  slug: boundary-wall

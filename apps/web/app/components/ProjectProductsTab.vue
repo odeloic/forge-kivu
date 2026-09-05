@@ -101,7 +101,7 @@ const { pending: acting, error: actionError, run } = useAsyncAction()
 
 const drop = (item: ProjectItem) =>
   run(async () => {
-    await removeItem(props.project.id, item.variantId)
+    await removeItem(props.project.id, item.variantId, item.space?.id)
     emit('changed')
   })
 </script>
@@ -230,7 +230,7 @@ const drop = (item: ProjectItem) =>
                 </span>
               </td>
             </tr>
-            <tr v-for="item in group.items" :key="item.variantId">
+            <tr v-for="item in group.items" :key="item.id">
               <td>
                 <span class="thumb">
                   <img

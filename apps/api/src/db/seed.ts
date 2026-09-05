@@ -36,10 +36,12 @@ import { suppliers } from '../modules/suppliers/suppliers.tables'
 import {
   createAttributeSchema,
   createCategorySchema,
+  createSpaceSchema,
   createUnitSchema,
 } from '../modules/taxonomy/taxonomy.schemas'
 import {
   categories,
+  spaces,
   specAttributes,
   units,
 } from '../modules/taxonomy/taxonomy.tables'
@@ -61,6 +63,8 @@ type SeedSupplier = {
 type SeedSpecAttribute = z.infer<typeof createAttributeSchema>
 
 type SeedUnit = z.infer<typeof createUnitSchema>
+
+type SeedSpace = z.infer<typeof createSpaceSchema>
 
 type SeedProduct = z.infer<typeof seedProductSchema>
 
@@ -140,6 +144,23 @@ const seedUnitsSchema = z
         ctx.addIssue({
           code: 'custom',
           message: `Duplicate unit slug: ${item.slug}`,
+        })
+      }
+      slugs.add(item.slug)
+    }
+  })
+
+const seedSpacesSchema = z
+  .array(createSpaceSchema)
+  .min(1)
+  .superRefine((items, ctx) => {
+    const slugs = new Set<string>()
+
+    for (const item of items) {
+      if (slugs.has(item.slug)) {
+        ctx.addIssue({
+          code: 'custom',
+          message: `Duplicate space slug: ${item.slug}`,
         })
       }
       slugs.add(item.slug)
@@ -329,6 +350,14 @@ const loadSeedUnits = async (): Promise<SeedUnit[]> => {
   return seedUnitsSchema.parse(parse(source))
 }
 
+const loadSeedSpaces = async (): Promise<SeedSpace[]> => {
+  const source = await Bun.file(
+    new URL('./seed-data/spaces.yaml', import.meta.url),
+  ).text()
+
+  return seedSpacesSchema.parse(parse(source))
+}
+
 const loadSeedSpecAttributes = async (): Promise<SeedSpecAttribute[]> => {
   const source = await Bun.file(
     new URL('./seed-data/spec-attributes.yaml', import.meta.url),
@@ -423,6 +452,25 @@ const seedUnits = async (items: SeedUnit[]): Promise<number> =>
             symbol: item.symbol,
             sortOrder: item.sortOrder ?? sortOrder,
           },
+        })
+    }
+
+    return items.length
+  })
+
+const seedSpaces = async (items: SeedSpace[]): Promise<number> =>
+  db.transaction(async (tx) => {
+    for (const [sortOrder, item] of items.entries()) {
+      await tx
+        .insert(spaces)
+        .values({
+          name: item.name,
+          slug: item.slug,
+          sortOrder: item.sortOrder ?? sortOrder,
+        })
+        .onConflictDoUpdate({
+          target: spaces.slug,
+          set: { name: item.name, sortOrder: item.sortOrder ?? sortOrder },
         })
     }
 
@@ -688,6 +736,7 @@ const seedEnv = seedEnvSchema.parse(process.env)
 const categoryRoots = await loadSeedCategories()
 const supplierProfiles = await loadSeedSuppliers()
 const unitDefinitions = await loadSeedUnits()
+const spaceDefinitions = await loadSeedSpaces()
 const attributeDefinitions = await loadSeedSpecAttributes()
 const productDefinitions = await loadSeedProducts()
 
@@ -704,6 +753,7 @@ const basic = await seedUser(
 const categoryCount = await seedCategories(categoryRoots)
 const supplierCount = await seedSuppliers(supplierProfiles)
 const unitCount = await seedUnits(unitDefinitions)
+const spaceCount = await seedSpaces(spaceDefinitions)
 const attributeCount = await seedSpecAttributes(attributeDefinitions)
 const seededMedia = await seedProductImages(admin.id)
 const productCount = await seedProducts(productDefinitions, seededMedia)
@@ -715,6 +765,7 @@ logger.info(
     categoryCount,
     supplierCount,
     unitCount,
+    spaceCount,
     attributeCount,
     mediaCount: seededMedia.length,
     productCount,

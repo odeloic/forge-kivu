@@ -71,12 +71,57 @@ export const projectPhaseClass = (value: ProjectPhase | null): string =>
 
 export type ProjectLine = {
   variantId: string
+  spaceId: string | null
+  spaceName: string | null
   name: string
   sku: string | null
   label: string | null
   price: number | null
   quantity: number
 }
+
+export type LineRef = Pick<ProjectLine, 'variantId' | 'spaceId'>
+
+export type LineDiff = {
+  removed: ProjectLine[]
+  upserts: ProjectLine[]
+}
+
+export const lineKey = (line: LineRef): string =>
+  `${line.variantId}:${line.spaceId ?? ''}`
+
+export const diffLines = (
+  saved: ProjectLine[],
+  current: ProjectLine[],
+): LineDiff => {
+  const kept = new Set(current.map(lineKey))
+  const quantities = new Map(
+    saved.map((line) => [lineKey(line), line.quantity] as const),
+  )
+
+  return {
+    removed: saved.filter((line) => !kept.has(lineKey(line))),
+    upserts: current.filter(
+      (line) => quantities.get(lineKey(line)) !== line.quantity,
+    ),
+  }
+}
+
+export type LineItem = {
+  variantId: string
+  space: { id: string; name: string } | null
+  quantity: number
+}
+
+export const findLine = <T extends LineItem>(
+  items: T[],
+  variantId: string,
+  spaceId: string | null,
+): T | null =>
+  items.find(
+    (item) =>
+      item.variantId === variantId && (item.space?.id ?? null) === spaceId,
+  ) ?? null
 
 export const lineTotal = (line: ProjectLine): number =>
   line.price === null ? 0 : calculateLineTotal(line.price, line.quantity)

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { ProductListItem } from '@forge-kivu/api-client'
+
 definePageMeta({ access: 'public' })
 
 const api = useApi()
@@ -30,6 +32,14 @@ const lastPage = computed(() => {
   if (pageSize === 0) return 1
   return Math.max(1, Math.ceil(total.value / pageSize))
 })
+
+const panelOpen = ref(false)
+const target = ref<AddToProjectTarget | null>(null)
+
+const addToProject = (product: ProductListItem) => {
+  target.value = { product }
+  panelOpen.value = true
+}
 </script>
 
 <template>
@@ -51,6 +61,7 @@ const lastPage = computed(() => {
           v-for="product in products.items"
           :key="product.id"
           :product="product"
+          @add="addToProject(product)"
         />
       </div>
 
@@ -71,6 +82,8 @@ const lastPage = computed(() => {
         </UiButton>
       </nav>
     </section>
+
+    <AddToProjectDialog v-model:open="panelOpen" :target="target" />
   </div>
 </template>
 

@@ -8,11 +8,7 @@ import {
   selectionOf,
 } from '../app/utils/variants'
 
-const option = (
-  id: string,
-  name: string,
-  values: string[],
-): ProductOption => ({
+const option = (id: string, name: string, values: string[]): ProductOption => ({
   id,
   name,
   sortOrder: 0,
@@ -118,9 +114,9 @@ describe('priceRangeOf', () => {
   })
 
   it('ignores variants with no price', () => {
-    expect(priceRangeOf([variant('a', [], null), variant('b', [], 80)])).toEqual(
-      { min: 80, max: 80 },
-    )
+    expect(
+      priceRangeOf([variant('a', [], null), variant('b', [], 80)]),
+    ).toEqual({ min: 80, max: 80 })
   })
 
   it('is null when nothing is priced', () => {

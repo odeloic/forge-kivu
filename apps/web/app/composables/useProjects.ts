@@ -4,13 +4,16 @@ import type {
   ProjectItem,
   ProjectListItem,
   ProjectPhaseCompletion,
+  ProjectSpace,
 } from '@forge-kivu/api-client'
 import type {
   CreateProjectInput,
+  CreateProjectSpaceInput,
   ProjectPhase,
   ProjectSort,
   ProjectType,
   UpdateProjectInput,
+  UpdateProjectSpaceInput,
 } from '@forge-kivu/types'
 
 export type ProjectQuery = {
@@ -80,6 +83,38 @@ export const useProjects = () => {
     if (!res.ok) throw await toApiError(res)
   }
 
+  const createSpace = async (
+    id: string,
+    input: CreateProjectSpaceInput,
+  ): Promise<ProjectSpace> => {
+    const res = await api.projects[':id'].spaces.$post({
+      param: { id },
+      json: input,
+    })
+    if (!res.ok) throw await toApiError(res)
+    return res.json()
+  }
+
+  const updateSpace = async (
+    id: string,
+    spaceId: string,
+    patch: UpdateProjectSpaceInput,
+  ): Promise<ProjectSpace> => {
+    const res = await api.projects[':id'].spaces[':spaceId'].$patch({
+      param: { id, spaceId },
+      json: patch,
+    })
+    if (!res.ok) throw await toApiError(res)
+    return res.json()
+  }
+
+  const removeSpace = async (id: string, spaceId: string): Promise<void> => {
+    const res = await api.projects[':id'].spaces[':spaceId'].$delete({
+      param: { id, spaceId },
+    })
+    if (!res.ok) throw await toApiError(res)
+  }
+
   const setPhaseCompletion = async (
     id: string,
     phase: ProjectPhase,
@@ -111,6 +146,9 @@ export const useProjects = () => {
     remove,
     setItem,
     removeItem,
+    createSpace,
+    updateSpace,
+    removeSpace,
     setPhaseCompletion,
     clearPhaseCompletion,
   }

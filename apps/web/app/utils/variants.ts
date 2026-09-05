@@ -44,6 +44,19 @@ export const matchVariant = (
   return variants.find((variant) => sameValues(variant, chosen))
 }
 
+export const variantLabel = (
+  variant: ProductVariant,
+  options: ProductOption[],
+): string =>
+  options
+    .map(
+      (option) =>
+        option.values.find((value) => variant.optionValueIds.includes(value.id))
+          ?.value,
+    )
+    .filter((value): value is string => value !== undefined)
+    .join(' · ')
+
 export const priceRangeOf = (
   variants: ProductVariant[],
 ): { min: number; max: number } | null => {

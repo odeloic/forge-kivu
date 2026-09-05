@@ -54,13 +54,13 @@ const saveProducts = () =>
     const current = project.value
     if (!current) return
 
-    const kept = new Set(lines.value.map((line) => line.variantId))
-    for (const line of savedLines.value) {
-      if (!kept.has(line.variantId))
-        await removeItem(current.id, line.variantId)
+    const { removed, upserts } = diffLines(savedLines.value, lines.value)
+
+    for (const line of removed) {
+      await removeItem(current.id, line.variantId, line.spaceId ?? undefined)
     }
-    for (const line of lines.value) {
-      await setItem(current.id, line.variantId, line.quantity)
+    for (const line of upserts) {
+      await setItem(current.id, line.variantId, line.quantity, line.spaceId)
     }
 
     savedLines.value = lines.value.map((line) => ({ ...line }))
@@ -187,6 +187,7 @@ const materials = computed(() => linesTotal(lines.value))
     <ProjectProductPicker
       v-else-if="step === 4"
       v-model="lines"
+      :spaces="[]"
       :currency="currency"
     />
 

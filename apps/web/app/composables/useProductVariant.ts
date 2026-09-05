@@ -35,6 +35,11 @@ export const useProductVariant = (
     overrides.value = { ...overrides.value, [optionId]: valueId }
   }
 
+  const selectVariant = (id: string) => {
+    const chosen = variants.value.find((row) => row.id === id)
+    if (chosen) overrides.value = selectionOf(options.value, chosen)
+  }
+
   return {
     options,
     variants,
@@ -45,5 +50,6 @@ export const useProductVariant = (
     imageUrl,
     isSelected,
     select,
+    selectVariant,
   }
 }
