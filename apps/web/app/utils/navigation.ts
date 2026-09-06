@@ -4,14 +4,10 @@ export type NavEntry = {
 }
 
 export const PRIMARY_NAV: readonly NavEntry[] = [
-  { path: '/', label: 'Home' },
   { path: '/products', label: 'Products' },
   { path: '/spaces', label: 'Spaces' },
   { path: '/brands', label: 'Brands' },
   { path: '/suppliers', label: 'Suppliers' },
-  { path: '/contact', label: 'Contact' },
-  { path: '/workshop', label: 'Workshop' },
-  { path: '/admin', label: 'Admin' },
 ]
 
 export const WORKSHOP_NAV: readonly NavEntry[] = [
@@ -33,3 +29,9 @@ export const activeNavPath = (
     if (longest !== null && longest.length >= entry.path.length) return longest
     return entry.path
   }, null)
+
+export const MENU_ENDPOINTS = {
+  '/products': 'categories',
+  '/spaces': 'spaces',
+  '/suppliers': 'suppliers',
+} as const
