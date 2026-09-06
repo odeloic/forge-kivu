@@ -1065,6 +1065,44 @@ describe('latest BOQ on the project list', () => {
     expect(rows[0]).toMatchObject({ id: mine, latestBoq: null })
   })
 
+  it('composes latestBoq on the detail and flags it stale after a change', async () => {
+    const admin = await loginAsAdmin(ADMIN)
+    const { variantId } = await seededProduct(admin, 'cement-tile', true)
+    const owner = await loginAs(OWNER)
+    const id = await createProject(owner)
+    await putItem(id, variantId, owner, { quantity: 2 })
+
+    type Detail = { latestBoq: { revision: number; stale: boolean } | null }
+    const detailOf = async () => jsonOf<Detail>(await getProject(id, owner))
+
+    expect((await detailOf()).latestBoq).toBeNull()
+
+    await generateBoq(id, owner)
+    expect((await detailOf()).latestBoq).toMatchObject({
+      revision: 1,
+      stale: false,
+    })
+
+    const spaceId = await createdId(
+      await app.request(
+        `/projects/${id}/spaces`,
+        jsonRequest({ name: 'Kitchen' }, owner),
+      ),
+      'project space create',
+    )
+    await app.request(
+      `/projects/${id}/spaces/${spaceId}`,
+      write('PATCH', owner, { name: 'Pantry' }),
+    )
+    expect((await detailOf()).latestBoq).toMatchObject({ stale: false })
+
+    await putItem(id, variantId, owner, { quantity: 3 })
+    expect((await detailOf()).latestBoq).toMatchObject({
+      revision: 1,
+      stale: true,
+    })
+  })
+
   it('summarises the whole list in a fixed number of queries', async () => {
     const admin = await loginAsAdmin(ADMIN)
     const { variantId } = await seededProduct(admin, 'cement-tile', true)

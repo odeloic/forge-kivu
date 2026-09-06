@@ -1370,15 +1370,15 @@ describe('export mirrors the view', () => {
     expect(csv.split('\n').slice(0, 4)).toEqual([
       'group,name,lineTotal',
       'Kitchen,Product green-sheet,41.00',
-      'Unassigned,Product plain-sheet,5.00',
-      'Unassigned,Product red-sheet,30.00',
+      'No space,Product plain-sheet,5.00',
+      'No space,Product red-sheet,30.00',
     ])
     expect(columnA(sheet, 7)).toEqual([
       'Name',
       'Kitchen',
       'Product green-sheet',
       'Subtotal',
-      'Unassigned',
+      'No space',
       'Product plain-sheet',
       'Product red-sheet',
       'Subtotal',

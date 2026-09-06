@@ -52,7 +52,8 @@ export const projectRoutes = new Hono()
   .get('/:id', zValidator('param', projectIdParamSchema), async (c) => {
     const project = await getOwned(c.req.valid('param').id, c.get('user').id)
     if (!project) throw new AppError('NOT_FOUND')
-    return c.json(project)
+    const summaries = await boqSummaries([project.id])
+    return c.json({ ...project, latestBoq: summaries.get(project.id) ?? null })
   })
   .patch(
     '/:id',

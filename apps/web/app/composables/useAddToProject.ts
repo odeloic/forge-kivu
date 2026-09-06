@@ -119,8 +119,9 @@ export const useAddToProject = (
       nameValid.value,
   )
 
+  /** FIXME: probably not smart passing this as a literal string */
   const openProjectPath = computed(
-    () => `/workshop/projects/${project.value?.id ?? ''}?tab=products`,
+    () => `/workshop/projects/${project.value?.id ?? ''}?tab=boq`,
   )
 
   const signInPath = computed(() => {

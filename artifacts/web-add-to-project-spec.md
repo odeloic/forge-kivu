@@ -12,7 +12,8 @@ Adds a product to a project, and to a space in that project, from the storefront
 6. **The two space refusals use `errorMessage` with the design's wording.** `PROJECT_SPACE_DUPLICATE` becomes "That name is already a space in this project. Pick it from the list instead." and `PROJECT_SPACE_LIMIT` becomes "50 spaces is the limit for a project. Rename or remove one first." in `packages/nuxt-base/app/utils/errors.ts`. The panel carries no copy of its own; both messages show under the name field.
 7. **Last-used project and space live in `localStorage`, written only after a successful add.** Key `forge-kivu.add-to-project`, value `{ projectId, spaceByProject: { [projectId]: spaceId | null } }`. Read on the client only. A stale id falls back to the first project in the list, then the project's first space, then no space. Rejected: a backend field. The server has no notion of "last used" and a default does not earn a migration. Deferred: an account-level preference if it must follow the user across devices.
 8. **Signed-out visitors get the sign-in state in the panel and come back with the panel open.** "Sign in" goes to `/login?redirect=<product page>?add=<variantId>`. On load the product page reads `add`, selects that variant, opens the panel and strips the query. A card sends `add=` empty, which opens on the variant step. No "Create account" button: `apps/web` has no signup page, only `useSession().signup`. Deferred until a signup page exists.
-9. **"Open project" lands on `/workshop/projects/:id?tab=products`.** The flow artboard names the BOQ tab with `groupBy=space`, but the working copy is the products tab, and `groupBy` is a BOQ (bill of quantities) view parameter for frozen revisions. Deferred: a `space` group on the products tab.
+9. ~~**"Open project" lands on `/workshop/projects/:id?tab=products`.** The flow artboard names the BOQ tab with `groupBy=space`, but the working copy is the products tab, and `groupBy` is a BOQ (bill of quantities) view parameter for frozen revisions. Deferred: a `space` group on the products tab.~~
+   **"Open project" lands on `/workshop/projects/:id?tab=boq`.** The Products tab merged into the Bill of quantities tab (workshop-projects-views.md, One tab); with no `revision` that is the working copy, and `groupBy=space` now applies to it too.
 10. **Below 900px the shared `UiDialog` docks to the bottom as a sheet.** One media query in `packages/ui`, so every dialog in both apps behaves the same on a phone. The quantity field shows − / + steppers below the same breakpoint, every target at least 44px.
 11. **The workshop picker keys every line on variant + space.** `ProjectLine` gains `spaceId` and `spaceName`; "Added", the space column and the save diff use `lineKey = variantId:spaceId`. A line can be moved between spaces from the selected table; spaces already holding that variant are disabled in that line's select, so two lines never collide. Removes run before puts, so a move is delete-then-put.
 12. **`ProjectProductsTab` passes the item's space when removing.** Today it calls `removeItem(project.id, item.variantId)`, which deletes the no-space row whichever row was clicked. Same family as the picker bug.
@@ -82,7 +83,7 @@ apps/api/src/db/seed.ts                          changed  seedSpaces
 | Add / Update quantity, existing or no space | `PUT /projects/:id/items/:variantId { quantity, spaceId }` | `done`; remember project and space |
 | Add, new space | `POST /projects/:id/spaces { name, spaceId? }` → 201, then the `PUT` with the created id | `done`; POST refused → `spaceError`, no PUT; PUT failed → space kept and selected, `error` |
 | Add to another space | none | `edit`, same project, quantity kept |
-| Open project | none | `/workshop/projects/:id?tab=products` |
+| Open project | none | ~~`/workshop/projects/:id?tab=products`~~ `/workshop/projects/:id?tab=boq` |
 
 ## Workshop picker
 
@@ -132,7 +133,7 @@ Acceptance criteria:
 - "New space…" with "Kitchen": `POST …/spaces { name: 'Kitchen' }` then `PUT … { spaceId: <created> }`. Picking the suggestion "Kitchen" sends its canonical id as `spaceId` in the POST.
 - POST answers 409 or `PROJECT_SPACE_LIMIT`: the message shows under the name, no PUT is sent, the panel stays open.
 - POST succeeds and the PUT fails (unpublish the product first, expect `PRODUCT_NOT_PUBLISHED`): the new space is selected in the select, the error shows under the action, and `GET /projects/:id` lists the space.
-- Done reads `Kabeza House · Kitchen · 36 sheet · 604,800 RWF`; "Open project" lands on `?tab=products` with the line present; "Add to another space" returns to edit with the quantity kept.
+- Done reads `Kabeza House · Kitchen · 36 sheet · 604,800 RWF`; "Open project" lands on ~~`?tab=products`~~ `?tab=boq` with the line present; "Add to another space" returns to edit with the quantity kept.
 - After a success `localStorage` holds the project and space, and the next open starts on them.
 - A user with no projects sees "No projects yet" with a link to `/workshop/projects/new`.
 

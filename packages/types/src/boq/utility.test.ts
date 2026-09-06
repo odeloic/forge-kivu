@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
-import { type BoqLineView, boqViewQuerySchema } from '../boq'
+import { BOQ_COLUMNS, type BoqLineView, boqViewQuerySchema } from '../boq'
 import {
   arrangeLines,
   compareLines,
+  groupedColumn,
   groupKey,
+  groupLabel,
   serialiseBoqView,
+  visibleColumns,
 } from './utility'
 
 const line = (
@@ -83,7 +86,7 @@ describe('arrangeLines', () => {
     expect(groups.map((group) => [group.label, group.subtotal])).toEqual([
       ['Bath', 30],
       ['Kitchen', 41],
-      ['Unassigned', 5],
+      ['No space', 5],
     ])
   })
 
@@ -101,6 +104,14 @@ describe('arrangeLines', () => {
     expect(groupKey(plain, 'color')).toBe('')
   })
 
+  it('names an empty group after the dimension it is missing', () => {
+    expect(groupLabel('', 'space')).toBe('No space')
+    expect(groupLabel('', 'supplier')).toBe('No supplier')
+    expect(groupLabel('', 'category')).toBe('No category')
+    expect(groupLabel('', 'color')).toBe('No colour')
+    expect(groupLabel('Kitchen', 'space')).toBe('Kitchen')
+  })
+
   it('sorts inside each group with the shared comparator', () => {
     const view = boqViewQuerySchema.parse({ sort: 'unitPrice:desc' })
     const sorted = [green, plain, red].sort(compareLines(view.sort))
@@ -112,5 +123,32 @@ describe('arrangeLines', () => {
       'Plain sheet',
     ])
     expect(arranged[0]?.lines).toEqual(sorted)
+  })
+})
+
+describe('visibleColumns', () => {
+  it('folds the grouped column out of the rows', () => {
+    expect(
+      visibleColumns({ columns: [...BOQ_COLUMNS], groupBy: 'space' }),
+    ).toEqual(BOQ_COLUMNS.filter((column) => column !== 'space'))
+    expect(groupedColumn('supplier')).toBe('supplier')
+  })
+
+  it('folds nothing for colour and no grouping', () => {
+    expect(
+      visibleColumns({ columns: [...BOQ_COLUMNS], groupBy: 'color' }),
+    ).toEqual([...BOQ_COLUMNS])
+    expect(groupedColumn('color')).toBeNull()
+    expect(groupedColumn(null)).toBeNull()
+  })
+
+  it('keeps the locked columns in canonical order whatever the input', () => {
+    expect(
+      visibleColumns({ columns: ['quantity', 'sku'], groupBy: null }),
+    ).toEqual(['name', 'sku', 'quantity', 'lineTotal'])
+    expect(visibleColumns({ columns: [], groupBy: 'category' })).toEqual([
+      'name',
+      'lineTotal',
+    ])
   })
 })

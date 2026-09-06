@@ -3,22 +3,31 @@ definePageMeta({ access: 'authenticated', layout: 'workshop' })
 
 const TABS = [
   { value: 'overview', label: 'Overview' },
-  { value: 'products', label: 'Products' },
-  { value: 'boqs', label: 'BOQs' },
+  { value: 'boq', label: 'Bill of quantities' },
   { value: 'settings', label: 'Settings' },
 ] as const
 
 type TabValue = (typeof TABS)[number]['value']
 
+const TAB_ALIASES: Record<string, TabValue> = {
+  products: 'boq',
+  boqs: 'boq',
+}
+
 const isTab = (value: unknown): value is TabValue =>
   TABS.some((entry) => entry.value === value)
+
+const resolveTab = (value: unknown): TabValue => {
+  if (isTab(value)) return value
+  return (typeof value === 'string' && TAB_ALIASES[value]) || 'overview'
+}
 
 const route = useRoute()
 const router = useRouter()
 const id = computed(() => String(route.params.id))
 
 const { detail, remove } = useProjects()
-const { listForProject, generate } = useBoqs()
+const { listForProject } = useBoqs()
 const { settings, load: loadSettings } = useSettings()
 
 await loadSettings()
@@ -39,12 +48,11 @@ const { data: boqs, refresh: refreshBoqs } = await useAsyncData(
 )
 
 const revisions = computed(() => boqs.value ?? [])
-const latest = computed(() => revisions.value[0] ?? null)
-const nextRevision = computed(() => (latest.value?.revision ?? 0) + 1)
 
 const tab = computed<TabValue>({
-  get: () => (isTab(route.query.tab) ? route.query.tab : 'overview'),
+  get: () => resolveTab(route.query.tab),
   set: (value) => {
+    if (value === resolveTab(route.query.tab)) return
     void router.replace({
       query: value === 'overview' ? {} : { tab: value },
     })
@@ -53,8 +61,7 @@ const tab = computed<TabValue>({
 
 const counts = computed<Record<TabValue, number | null>>(() => ({
   overview: null,
-  products: data.value?.items.length ?? 0,
-  boqs: revisions.value.length,
+  boq: data.value?.items.length ?? 0,
   settings: null,
 }))
 
@@ -72,13 +79,6 @@ const summary = computed(() => {
 const { pending: acting, error: actionError, run } = useAsyncAction()
 
 const confirming = ref(false)
-
-const generateRevision = () =>
-  run(async () => {
-    await generate(id.value)
-    await refreshBoqs()
-    tab.value = 'boqs'
-  })
 
 const confirmRemove = () =>
   run(async () => {
@@ -104,14 +104,9 @@ const reload = async () => {
         {{ projectPhaseLabel(data.phase) }}
       </span>
       <div class="spacer" />
-      <UiButton
-        variant="primary"
-        :disabled="acting || data.items.length === 0"
-        @click="generateRevision"
-      >
-        {{ acting ? 'Working…' : `Generate revision ${nextRevision}` }}
+      <UiButton variant="ghost" :disabled="acting" @click="confirming = true">
+        Delete
       </UiButton>
-      <UiButton variant="ghost" @click="confirming = true">Delete</UiButton>
     </div>
 
     <p class="muted summary">{{ summary }}</p>
@@ -144,16 +139,13 @@ const reload = async () => {
         />
       </TabsContent>
 
-      <TabsContent value="products" class="panel">
-        <ProjectProductsTab
+      <TabsContent value="boq" class="panel">
+        <ProjectBoqTab
           :project="data"
+          :revisions="revisions"
           :currency="currency"
           @changed="reload"
         />
-      </TabsContent>
-
-      <TabsContent value="boqs" class="panel">
-        <ProjectBoqsTab :revisions="revisions" :currency="currency" />
       </TabsContent>
 
       <TabsContent value="settings" class="panel">

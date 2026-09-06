@@ -35,7 +35,7 @@ const savedLines = computed(() => (data.value?.items ?? []).map(toLine))
 
 const lines = ref<ProjectLine[]>(savedLines.value.map((line) => ({ ...line })))
 
-const back = computed(() => `/workshop/projects/${id.value}?tab=products`)
+const back = computed(() => `/workshop/projects/${id.value}?tab=boq`)
 
 const { pending: saving, error: actionError, run } = useAsyncAction()
 

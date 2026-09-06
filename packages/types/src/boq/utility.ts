@@ -1,6 +1,8 @@
 import { ATTRIBUTE_VALUE_TYPES } from '../taxonomy'
 import { calculateLineTotalCents, sumLineTotals } from '../money'
 import {
+  BOQ_COLUMNS,
+  type BoqColumn,
   type BoqGroup,
   type BoqLineView,
   type BoqSort,
@@ -26,6 +28,23 @@ export const serialiseBoqView = (
   return params
 }
 
+export const groupedColumn = (groupBy: BoqGroup | null): BoqColumn | null =>
+  groupBy === 'space' || groupBy === 'supplier' || groupBy === 'category'
+    ? groupBy
+    : null
+
+export const visibleColumns = (
+  view: Pick<BoqViewQuery, 'columns' | 'groupBy'>,
+): BoqColumn[] => {
+  const folded = groupedColumn(view.groupBy)
+  const selected = new Set<BoqColumn>(view.columns)
+  return BOQ_COLUMNS.filter(
+    (column) =>
+      column !== folded &&
+      (selected.has(column) || column === 'name' || column === 'lineTotal'),
+  )
+}
+
 export const colorOption = (line: BoqLineView) =>
   line.options.find((option) => option.type === ATTRIBUTE_VALUE_TYPES.COLOR) ??
   null
@@ -43,10 +62,15 @@ export const groupKey = (line: BoqLineView, groupBy: BoqGroup): string => {
   }
 }
 
-export const groupLabel = (key: string, groupBy: BoqGroup): string => {
-  if (key !== '') return key
-  return groupBy === 'color' ? 'No colour' : 'Unassigned'
+export const EMPTY_GROUP_LABELS: Record<BoqGroup, string> = {
+  space: 'No space',
+  supplier: 'No supplier',
+  category: 'No category',
+  color: 'No colour',
 }
+
+export const groupLabel = (key: string, groupBy: BoqGroup): string =>
+  key === '' ? EMPTY_GROUP_LABELS[groupBy] : key
 
 const sortValue = (line: BoqLineView, field: BoqSortField): string | number => {
   switch (field) {
